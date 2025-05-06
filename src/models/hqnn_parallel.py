@@ -25,14 +25,15 @@ def get_quantum_circuit(wires: int) -> Callable:
 
 class HQNN_Parallel(nn.Module):
     """HQNN_Parallel model combining classical CNN and quantum layers."""
-    def __init__(self, conv_channels: List[int], kernel_sizes: List[int],
+    def __init__(self, in_channels: int, num_classes: int,
+                 conv_channels: List[int], kernel_sizes: List[int],
                  pool_sizes: List[int], fc_sizes: List[int],
-                 num_qubits: int, num_qlayers: int,
-                 num_classes: int) -> None:
+                 num_qubits: int, num_qlayers: int) -> None:
         super().__init__()
 
-        self.conv1 = nn.Conv2d(1, conv_channels[0],
-                               kernel_sizes[0], padding=kernel_sizes[1] // 2)
+        # Classical convolutional and linear layers
+        self.conv1 = nn.Conv2d(in_channels, conv_channels[0],
+                               kernel_sizes[0], padding=kernel_sizes[0] // 2)
         self.bn1 = nn.BatchNorm2d(conv_channels[0])
         self.relu1 = nn.ReLU()
         self.pool1 = nn.MaxPool2d(kernel_size=pool_sizes[0])
@@ -43,25 +44,25 @@ class HQNN_Parallel(nn.Module):
         self.relu2 = nn.ReLU()
         self.pool2 = nn.MaxPool2d(kernel_size=pool_sizes[1])
 
-        self.pool_sizes = pool_sizes
-        reduction = pool_sizes[0] * pool_sizes[1]
-        self.flatten_dim = (28 // reduction) ** 2 * conv_channels[1]  # TODO:28
+        self.flatten = nn.Flatten(start_dim=1)
 
-        self.fc1 = nn.Linear(self.flatten_dim, fc_sizes[0])
+        self.fc1 = nn.LazyLinear(fc_sizes[0])  # To not calculate in_features
         self.relu3 = nn.ReLU()
         self.fc2 = nn.Linear(fc_sizes[0], fc_sizes[1])
         self.relu4 = nn.ReLU()
 
-        assert fc_sizes[1] % num_qubits == 0
-
+        # Quantum layers
         self.num_qubits = num_qubits
         weight_shapes = {"weights": (num_qlayers, num_qubits)}
         circuit = get_quantum_circuit(num_qubits)
+
+        assert fc_sizes[1] % num_qubits == 0
         self.qnetlayers = nn.ModuleList([
             TorchLayer(circuit, weight_shapes)
             for _ in range(fc_sizes[1] // num_qubits)
         ])
 
+        # Classical linear layer
         self.fc3 = nn.Linear(fc_sizes[1], num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -70,7 +71,8 @@ class HQNN_Parallel(nn.Module):
         x = self.relu2(self.bn2(self.conv2(x)))
         x = self.pool2(x)
 
-        x = x.view(-1, self.flatten_dim)
+        x = self.flatten(x)
+
         x = self.relu3(self.fc1(x))
         x = self.relu4(self.fc2(x))
 

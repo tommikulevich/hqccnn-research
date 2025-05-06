@@ -41,8 +41,13 @@ def main() -> None:
         raise ValueError(f"Unknown model: {model_name}")
 
     # Initialize model with params
-    model = ModelClass(**config.model.params,
-                       num_classes=config.data.params['num_classes'])
+    sample_data, _ = next(iter(train_loader))
+    in_channels = sample_data.shape[1]
+    model = ModelClass(
+        in_channels=in_channels,
+        num_classes=config.data.params['num_classes'],
+        **config.model.params,
+    )
     print(model)
 
     def run_experiment(cfg):
