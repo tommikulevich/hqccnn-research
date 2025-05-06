@@ -1,0 +1,225 @@
+"""Trainer module for training and evaluating models."""
+import os
+from tqdm import tqdm
+from datetime import datetime
+from pathlib import Path
+from dataclasses import dataclass, asdict
+from typing import Optional
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader
+import numpy as np
+from sklearn.metrics import accuracy_score, precision_score, \
+                            recall_score, f1_score
+
+from config.config import Config
+from utils.common import flatten_dict
+from utils.logger import setup_logging, get_mlflow_writer, CSVLogger
+
+
+@dataclass(frozen=True)
+class Metrics:
+    """Performance metrics container."""
+    loss: float
+    accuracy: float
+
+    precision: float
+    precision_weighted: float
+
+    recall: float
+    recall_weighted: float
+
+    f1: float
+    f1_weighted: float
+
+
+class Trainer:
+    """Handles training, validation, checkpointing, and logging."""
+    def __init__(self, config: Config,
+                 model: nn.Module,
+                 loss_fn: nn.Module,
+                 optimizer: optim.Optimizer,
+                 scheduler: Optional[torch.optim.lr_scheduler._LRScheduler],
+                 train_loader: DataLoader,
+                 val_loader: DataLoader,
+                 resume_from: Optional[str] = None,
+                 dry_run: bool = False) -> None:
+        self.config = config
+        self.model = model.to(config.training.device)
+        self.train_loader = train_loader
+        self.val_loader = val_loader
+        self.dry_run = dry_run
+
+        # Logging
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        self.log_dir = Path(config.logging.log_dir, ts)
+        self.logger = setup_logging(ts, self.log_dir)
+
+        dashboard_dir = Path(config.logging.dashboard_dir).absolute()
+        dashboard_dir.mkdir(parents=True, exist_ok=True)
+        self.writer = get_mlflow_writer(
+            self.config.model.name.value, dashboard_dir.as_uri(), ts)
+        self.writer.add_params(flatten_dict(asdict(config)))
+
+        self.train_csv = CSVLogger(
+            os.path.join(self.log_dir, f'train_{ts}.csv')
+        )
+        self.val_csv = CSVLogger(
+            os.path.join(self.log_dir, f'val_{ts}.csv')
+        )
+
+        # Loss function, optimizer and scheduler
+        self.loss_fn = loss_fn
+        self.optimizer = optimizer
+        self.scheduler = scheduler
+
+        # Checkpoint dir
+        self.checkpoint_dir = Path(self.config.logging.checkpoint_dir, ts)
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
+
+        self.start_epoch = 1
+
+        # Resume
+        if resume_from:
+            self._load_checkpoint(resume_from)
+
+    def _save_checkpoint(self, epoch: int) -> None:
+        """Save model, optimizer, scheduler states and epoch info."""
+        path = self.checkpoint_dir / f'checkpoint_epoch{epoch}.pt'
+        state = {
+            'epoch': epoch,
+            'model_state': self.model.state_dict(),
+            'optimizer_state': self.optimizer.state_dict(),
+            'scheduler_state':
+                self.scheduler.state_dict() if self.scheduler else None,
+            'config': asdict(self.config),
+        }
+        torch.save(state, path)
+        self.logger.info(f'Checkpoint saved: {path}')
+
+    def _load_checkpoint(self, path: str) -> None:
+        """Load checkpoint and restore states."""
+        chk = torch.load(path, map_location=self.config.training.device,
+                         weights_only=False)
+        self.model.load_state_dict(chk['model_state'])
+        self.optimizer.load_state_dict(chk['optimizer_state'])
+        if self.scheduler is not None:
+            self.scheduler.load_state_dict(chk['scheduler_state'])
+        self.start_epoch = chk.get('epoch', 0) + 1
+        self.logger.info(f"Resuming from checkpoint: {path}, "
+                         f"epoch {self.start_epoch}")
+
+    def _compute_metrics(self, preds: np.ndarray, targets: np.ndarray) -> dict:
+        """Compute accuracy, precision, recall, and F1 scores."""
+        return {
+            'accuracy': accuracy_score(targets, preds),
+            'precision': precision_score(targets, preds,
+                                         average='macro',
+                                         zero_division=0),
+            'precision_weighted': precision_score(targets, preds,
+                                                  average='weighted',
+                                                  zero_division=0),
+            'recall': recall_score(targets, preds,
+                                   average='macro',
+                                   zero_division=0),
+            'recall_weighted': recall_score(targets, preds,
+                                            average='weighted',
+                                            zero_division=0),
+            'f1': f1_score(targets, preds,
+                           average='macro',
+                           zero_division=0),
+            'f1_weighted': f1_score(targets, preds,
+                                    average='weighted',
+                                    zero_division=0),
+        }
+
+    def train_epoch(self, epoch: int) -> dict:
+        """Run one epoch of training."""
+        self.model.train()
+
+        losses = []
+        all_preds, all_targets = [], []
+        for batch_idx, (data, target) in enumerate(
+                tqdm(self.train_loader, desc=f'Train Epoch {epoch}')):
+            if self.dry_run:
+                if batch_idx >= self.config.data.params['dry_run_batches']:
+                    break
+
+            data = data.to(self.config.training.device)
+            target = target.to(self.config.training.device)
+
+            self.optimizer.zero_grad()
+            output = self.model(data)
+
+            loss = self.loss_fn(output, target)
+            loss.backward()
+            self.optimizer.step()
+            losses.append(loss.item())
+
+            preds = output.argmax(dim=1).cpu().numpy()
+            all_preds.extend(preds.tolist())
+            all_targets.extend(target.cpu().numpy().tolist())
+
+        stats = self._compute_metrics(np.array(all_preds),
+                                      np.array(all_targets))
+
+        return Metrics(loss=float(np.mean(losses)), **stats)
+
+    def validate(self, epoch: int) -> dict:
+        """Run validation."""
+        self.model.eval()
+
+        losses = []
+        all_preds, all_targets = [], []
+        with torch.no_grad():
+            loader = self.val_loader
+            for batch_idx, (data, target) in enumerate(
+                    tqdm(loader, desc=f'Val Epoch {epoch}')):
+                data = data.to(self.config.training.device)
+                target = target.to(self.config.training.device)
+
+                output = self.model(data)
+
+                loss = self.loss_fn(output, target)
+                losses.append(loss.item())
+
+                preds = output.argmax(dim=1).cpu().numpy()
+                all_preds.extend(preds.tolist())
+                all_targets.extend(target.cpu().numpy().tolist())
+
+        stats = self._compute_metrics(np.array(all_preds),
+                                      np.array(all_targets))
+        return Metrics(loss=float(np.mean(losses)), **stats)
+
+    def run(self) -> None:
+        """Execute full training and validation cycles."""
+        self.logger.info(f'Configuration: {self.config}')
+        for epoch in range(self.start_epoch, self.config.training.epochs + 1):
+            train_metrics = self.train_epoch(epoch)
+            for k, v in asdict(train_metrics).items():
+                self.writer.add_scalar(f'train/{k}', v, epoch)
+            self.train_csv.log({'epoch': epoch, **asdict(train_metrics)})
+
+            val_metrics = self.validate(epoch)
+            for k, v in asdict(val_metrics).items():
+                self.writer.add_scalar(f'val/{k}', v, epoch)
+            self.val_csv.log({'epoch': epoch, **asdict(val_metrics)})
+
+            self.logger.info(f"Epoch {epoch} | "
+                             f"Train: {asdict(train_metrics)} | "
+                             f"Val: {asdict(val_metrics)}")
+
+            if self.scheduler is not None:
+                self.scheduler.step()
+
+            if epoch % self.config.logging.save_interval == 0:
+                self._save_checkpoint(epoch)
+
+            if self.dry_run:
+                break
+
+        self.writer.close()
+        self.train_csv.close()
+        self.val_csv.close()
