@@ -9,17 +9,19 @@ from config.config import DataConfig
 from config.enums import DatasetName
 
 
-def get_dataset(dataset_name: str, data_dir: str,
-                transform: transforms.Compose):
+def get_dataset(dataset_name: str, data_dir: str):
     """Get training and validation datasets based on dataset name."""
     if dataset_name == DatasetName.MNIST:
         train_ds = datasets.MNIST(data_dir, train=True, download=True,
-                                  transform=transform)
+                                  transform=transforms.ToTensor())
         val_ds = datasets.MNIST(data_dir, train=False, download=True,
-                                transform=transform)
+                                transform=transforms.ToTensor())
     elif dataset_name == DatasetName.IMAGEFOLDER:
-        train_ds = ImageFolder(f"{data_dir}/train", transform=transform)
-        val_ds = ImageFolder(f"{data_dir}/val", transform=transform)
+        # TODO: consider keeping transforms in config
+        train_ds = ImageFolder(f"{data_dir}/train",
+                               transform=transforms.ToTensor())
+        val_ds = ImageFolder(f"{data_dir}/val",
+                             transform=transforms.ToTensor())
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
@@ -28,15 +30,12 @@ def get_dataset(dataset_name: str, data_dir: str,
 
 def get_dataloaders(cfg: DataConfig) -> Tuple[DataLoader, DataLoader]:
     """Return training and validation dataloaders using registry pattern."""
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-    ])
 
     data_dir = cfg.params['data_dir']
     batch_size = cfg.params['batch_size']
     num_workers = cfg.params['num_workers']
 
-    train_ds, val_ds = get_dataset(cfg.name, data_dir, transform)
+    train_ds, val_ds = get_dataset(cfg.name, data_dir)
 
     train_loader = DataLoader(
         train_ds,
