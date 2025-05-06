@@ -1,5 +1,6 @@
 """Trainer module for training and evaluating models."""
 import os
+import zipfile
 from tqdm import tqdm
 from datetime import datetime
 from pathlib import Path
@@ -54,8 +55,6 @@ class Trainer:
 
         # Logging
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.log_dir = Path(config.logging.log_dir, ts)
-        self.logger = setup_logging(ts, self.log_dir)
 
         dashboard_dir = Path(config.logging.dashboard_dir).absolute()
         dashboard_dir.mkdir(parents=True, exist_ok=True)
@@ -63,12 +62,11 @@ class Trainer:
             self.config.model.name.value, dashboard_dir.as_uri(), ts)
         self.writer.add_params(flatten_dict(asdict(config)))
 
-        self.train_csv = CSVLogger(
-            os.path.join(self.log_dir, f'train_{ts}.csv')
-        )
-        self.val_csv = CSVLogger(
-            os.path.join(self.log_dir, f'val_{ts}.csv')
-        )
+        self.log_dir = Path(config.logging.log_dir, ts)
+        self.logger, self.log_file = setup_logging(ts, self.log_dir)
+
+        self.train_csv = CSVLogger(self.log_dir / f'train_{ts}.csv')
+        self.val_csv = CSVLogger(self.log_dir / f'val_{ts}.csv')
 
         # Loss function, optimizer and scheduler
         self.loss_fn = loss_fn
@@ -85,6 +83,20 @@ class Trainer:
         if resume_from:
             self._load_checkpoint(resume_from)
 
+        # Save code and config snapshot
+        self._save_code_snapshot()
+
+    def _save_code_snapshot(self) -> None:
+        """Save code and config snapshot to ZIP."""
+        code_zip = self.log_dir / f'code_config_{self.log_dir.name}.zip'
+        with zipfile.ZipFile(str(code_zip), 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for file in Path('src').rglob('*.py'):
+                zipf.write(file, arcname=str(file))
+            for file in Path('configs').rglob('*.yaml'):
+                zipf.write(file, arcname=str(file))
+        self.writer.add_artifact(str(code_zip))
+        self.logger.info(f'Code and config snapshot saved: {code_zip}')
+
     def _save_checkpoint(self, epoch: int) -> None:
         """Save model, optimizer, scheduler states and epoch info."""
         path = self.checkpoint_dir / f'checkpoint_epoch{epoch}.pt'
@@ -97,6 +109,7 @@ class Trainer:
             'config': asdict(self.config),
         }
         torch.save(state, path)
+        self.writer.add_artifact(str(path))
         self.logger.info(f'Checkpoint saved: {path}')
 
     def _load_checkpoint(self, path: str) -> None:
@@ -219,6 +232,10 @@ class Trainer:
 
             if self.dry_run:
                 break
+
+        self.writer.add_artifact(str(self.log_file))
+        self.writer.add_artifact(str(self.train_csv.csv_path))
+        self.writer.add_artifact(str(self.val_csv.csv_path))
 
         self.writer.close()
         self.train_csv.close()

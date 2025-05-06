@@ -3,7 +3,7 @@ import os
 import csv
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Tuple, Any, Optional
 
 import mlflow
 from torch.utils.tensorboard import SummaryWriter
@@ -62,7 +62,7 @@ class MLflowWriter:
         mlflow.end_run()
 
 
-def setup_logging(ts: str, log_dir: str) -> logging.Logger:
+def setup_logging(ts: str, log_dir: str) -> Tuple[logging.Logger, str]:
     """Configure root logger to log to console and file with timestamps."""
     os.makedirs(log_dir, exist_ok=True)
     log_path = Path(log_dir) / f'run_{ts}.log'
@@ -82,7 +82,7 @@ def setup_logging(ts: str, log_dir: str) -> logging.Logger:
     fh.setFormatter(fmt)
     logger.addHandler(fh)
 
-    return logger
+    return logger, log_path
 
 
 def get_summary_writer(ts: str, tb_dir: str) -> SummaryWriter:
