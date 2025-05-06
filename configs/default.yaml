@@ -1,0 +1,50 @@
+version: "1.0"
+
+seed: 187720
+
+logging:
+  log_dir: outputs/logs
+  checkpoint_dir: outputs/checkpoints
+  dashboard_dir: outputs/mlflow
+  save_interval: 1
+
+data:
+  name: mnist
+  params:
+    data_dir: data/
+    num_classes: 10
+    num_workers: 4
+    batch_size: 64
+    dry_run_batches: 2
+
+model:
+  name: HQNN_Parallel
+  params:
+    conv_channels: [16, 32]
+    kernel_sizes: [5, 5]
+    pool_sizes: [2, 2]
+    fc_sizes: [120, 20]
+    num_qubits: 5
+    num_qlayers: 3
+
+training:
+  epochs: 10
+  device: cpu
+
+loss:
+  name: CrossEntropy
+  params:
+
+optimizer:
+  name: Adam
+  params:
+    lr: 0.001
+    weight_decay: 0.00001
+
+scheduler:
+  name: none
+  params:
+
+search:
+  method: none
+  params:
