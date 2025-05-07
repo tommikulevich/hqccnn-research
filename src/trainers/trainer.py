@@ -78,6 +78,7 @@ class Trainer:
         self.logger.info("> Loss function: \n%s", self.loss_fn)
         self.logger.info("> Optimizer: \n%s", self.optimizer)
         self.logger.info("> Scheduler: \n%s", self.scheduler)
+        self.writer.add_text(f"{model}", f'model_{ts}.txt')
 
         # Checkpoint dir
         self.checkpoint_dir = Path(self.config.logging.checkpoint_dir, ts)

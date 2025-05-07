@@ -57,6 +57,10 @@ class MLflowWriter:
         """Log an arbitrary file (e.g. a plot, a model checkpoint)."""
         mlflow.log_artifact(local_path, artifact_path=artifact_path)
 
+    def add_text(self, text: str, text_path: str = None):
+        """Log specific text to file."""
+        mlflow.log_text(text, artifact_file=text_path)
+
     def close(self):
         """End the MLflow run."""
         mlflow.end_run()
