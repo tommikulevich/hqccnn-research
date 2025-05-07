@@ -10,7 +10,11 @@ from config.enums import (DatasetName, ModelName, LossName,
 
 DATASET_REGISTRY = {
     DatasetName.MNIST: get_dataloaders,
-    DatasetName.IMAGEFOLDER: get_dataloaders,
+    DatasetName.FASHION_MNIST: get_dataloaders,
+    DatasetName.CIFAR10: get_dataloaders,
+    DatasetName.CIFAR100: get_dataloaders,
+    DatasetName.EUROSAT: get_dataloaders,
+    DatasetName.CUSTOM: get_dataloaders,
 }
 
 MODEL_REGISTRY = {

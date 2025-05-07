@@ -4,7 +4,11 @@ from enum import Enum
 
 class DatasetName(str, Enum):
     MNIST = "mnist"
-    IMAGEFOLDER = "imagefolder"
+    FASHION_MNIST = "fashion-mnist"
+    CIFAR10 = "cifar10"
+    CIFAR100 = "cifar100"
+    EUROSAT = "eurosat"
+    CUSTOM = "custom"
 
 
 class ModelName(str, Enum):

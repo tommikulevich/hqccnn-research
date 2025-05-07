@@ -16,7 +16,27 @@ def get_dataset(dataset_name: str, data_dir: str):
                                   transform=transforms.ToTensor())
         val_ds = datasets.MNIST(data_dir, train=False, download=True,
                                 transform=transforms.ToTensor())
-    elif dataset_name == DatasetName.IMAGEFOLDER:
+    elif dataset_name == DatasetName.FASHION_MNIST:
+        train_ds = datasets.FashionMNIST(data_dir, train=True, download=True,
+                                         transform=transforms.ToTensor())
+        val_ds = datasets.FashionMNIST(data_dir, train=False, download=True,
+                                       transform=transforms.ToTensor())
+    elif dataset_name == DatasetName.CIFAR10:
+        train_ds = datasets.CIFAR10(data_dir, train=True, download=True,
+                                    transform=transforms.ToTensor())
+        val_ds = datasets.CIFAR10(data_dir, train=False, download=True,
+                                  transform=transforms.ToTensor())
+    elif dataset_name == DatasetName.CIFAR100:
+        train_ds = datasets.CIFAR100(data_dir, train=True, download=True,
+                                     transform=transforms.ToTensor())
+        val_ds = datasets.CIFAR100(data_dir, train=False, download=True,
+                                   transform=transforms.ToTensor())
+    elif dataset_name == DatasetName.EUROSAT:
+        train_ds = datasets.EuroSAT(data_dir, train=True, download=True,
+                                    transform=transforms.ToTensor())
+        val_ds = datasets.EuroSAT(data_dir, train=False, download=True,
+                                  transform=transforms.ToTensor())
+    elif dataset_name == DatasetName.CUSTOM:
         # TODO: consider keeping transforms in config
         train_ds = ImageFolder(f"{data_dir}/train",
                                transform=transforms.ToTensor())
