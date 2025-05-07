@@ -84,6 +84,14 @@ def main() -> None:
                           train_loader, val_loader,
                           resume_from=args.resume,
                           dry_run=args.dry_run)
+
+        # Sanity check model before start training
+        batch = next(iter(train_loader))
+        sample = batch[0] if isinstance(batch, (list, tuple)) else batch
+        model_check = trainer.sanity_check(sample)
+        if model_check:
+            raise model_check
+
         trainer.run()
 
     search_fn = SEARCH_REGISTRY.get(config.search.method)

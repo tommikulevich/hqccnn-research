@@ -53,6 +53,8 @@ class Trainer:
         self.val_loader = val_loader
         self.dry_run = dry_run
 
+        self.device = config.training.device
+
         # Logging
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -154,6 +156,15 @@ class Trainer:
                                     average='weighted',
                                     zero_division=0),
         }
+
+    def sanity_check(self, sample: torch.Tensor) -> Optional[Exception]:
+        sample = sample.to(self.device)
+        try:
+            with torch.no_grad():
+                self.model(sample)
+            return None
+        except Exception as e:
+            return e
 
     def train_epoch(self, epoch: int) -> dict:
         """Run one epoch of training."""
