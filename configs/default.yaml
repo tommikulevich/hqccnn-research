@@ -28,6 +28,8 @@ model:
     num_qubits: 5
     num_qlayers: 4
     num_qrepetitions: 3
+    qdevice: default.qubit
+    qdiff_method: backprop
 
 training:
   epochs: 10

@@ -10,11 +10,12 @@ from pennylane.qnn import TorchLayer
 dev: qml.device = None
 
 
-def get_quantum_circuit(wires: int) -> Callable:
+def get_quantum_circuit(wires: int, qdevice: str,
+                        qdiff_method: str) -> Callable:
     """Wrap a PennyLane device into a torch-compatible QNode."""
-    device = qml.device("default.qubit", wires=wires) if dev is None else dev
+    device = qml.device(qdevice, wires=wires) if dev is None else dev
 
-    @qml.qnode(device, interface='torch', diff_method="parameter-shift")
+    @qml.qnode(device, interface='torch', diff_method=qdiff_method)
     def quantum_circuit(inputs, weights):
         qml.AngleEmbedding(inputs, rotation='X', wires=list(range(wires)))
         qml.StronglyEntanglingLayers(weights, wires=list(range(wires)))
@@ -29,7 +30,8 @@ class HQNN_Parallel(nn.Module):
                  conv_channels: List[int], conv_kernels: List[int],
                  conv_strides: List[int], conv_paddings: List[int],
                  pool_sizes: List[int], num_qubits: int,
-                 num_qlayers: int, num_qrepetitions: int) -> None:
+                 num_qlayers: int, num_qrepetitions: int,
+                 qdevice: str, qdiff_method: str) -> None:
         super().__init__()
 
         self.num_qubits = num_qubits
@@ -74,7 +76,7 @@ class HQNN_Parallel(nn.Module):
         # Quantum layers
         weight_shapes = {"weights": qml.StronglyEntanglingLayers.shape(
             n_layers=num_qrepetitions, n_wires=num_qubits)}
-        circuit = get_quantum_circuit(num_qubits)
+        circuit = get_quantum_circuit(num_qubits, qdevice, qdiff_method)
 
         self.qlayers = nn.ModuleList([
             TorchLayer(circuit, weight_shapes)
