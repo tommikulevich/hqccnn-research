@@ -21,11 +21,13 @@ model:
   name: hqnn-parallel
   params:
     conv_channels: [16, 32]
-    kernel_sizes: [5, 5]
+    conv_kernels: [5, 5]
+    conv_strides: [1, 1]
+    conv_paddings: [2, 2]
     pool_sizes: [2, 2]
-    fc_sizes: [120, 20]
     num_qubits: 5
-    num_qlayers: 3
+    num_qlayers: 4
+    num_qrepetitions: 3
 
 training:
   epochs: 10
