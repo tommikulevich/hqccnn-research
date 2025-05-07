@@ -5,8 +5,8 @@ from enum import Enum
 class DatasetName(str, Enum):
     MNIST = "mnist"
     FASHION_MNIST = "fashion-mnist"
-    CIFAR10 = "cifar10"
-    CIFAR100 = "cifar100"
+    CIFAR10 = "cifar-10"
+    CIFAR100 = "cifar-100"
     EUROSAT = "eurosat"
     CUSTOM = "custom"
 

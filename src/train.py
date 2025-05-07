@@ -48,7 +48,6 @@ def main() -> None:
         num_classes=config.data.params['num_classes'],
         **config.model.params,
     )
-    print(model)
 
     def run_experiment(cfg):
         # Build loss function via registry

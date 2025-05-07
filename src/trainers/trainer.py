@@ -73,6 +73,12 @@ class Trainer:
         self.optimizer = optimizer
         self.scheduler = scheduler
 
+        self.logger.info(f"<<< RUN {ts} >>>")
+        self.logger.info("> Model: \n%s", model)
+        self.logger.info("> Loss function: \n%s", self.loss_fn)
+        self.logger.info("> Optimizer: \n%s", self.optimizer)
+        self.logger.info("> Scheduler: \n%s", self.scheduler)
+
         # Checkpoint dir
         self.checkpoint_dir = Path(self.config.logging.checkpoint_dir, ts)
         os.makedirs(self.checkpoint_dir, exist_ok=True)
