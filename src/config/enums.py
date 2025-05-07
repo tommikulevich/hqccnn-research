@@ -8,16 +8,16 @@ class DatasetName(str, Enum):
 
 
 class ModelName(str, Enum):
-    HQNNPARALLEL = "HQNN_Parallel"
+    HQNN_PARALLEL = "hqnn-parallel"
 
 
 class LossName(str, Enum):
-    CROSSENTROPY = "CrossEntropy"
+    CROSS_ENTROPY = "cross-entropy"
 
 
 class OptimizerName(str, Enum):
-    ADAM = "Adam"
-    SGD = "SGD"
+    ADAM = "adam"
+    SGD = "sgd"
 
 
 class SchedulerName(str, Enum):

@@ -14,11 +14,11 @@ DATASET_REGISTRY = {
 }
 
 MODEL_REGISTRY = {
-    ModelName.HQNNPARALLEL: HQNN_Parallel,
+    ModelName.HQNN_PARALLEL: HQNN_Parallel,
 }
 
 LOSS_REGISTRY = {
-    LossName.CROSSENTROPY: CrossEntropyLoss,
+    LossName.CROSS_ENTROPY: CrossEntropyLoss,
 }
 
 
