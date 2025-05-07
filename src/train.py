@@ -56,14 +56,18 @@ def main() -> None:
         loss_cls = LOSS_REGISTRY.get(loss_cfg.name)
         if loss_cls is None:
             raise ValueError(f"Unknown loss function: {loss_cfg.name}")
-        loss_fn = loss_cls(**(loss_cfg.params or {}))
+        loss_params = {} if loss_cfg.params in (None, "None", "none") \
+            else loss_cfg.params
+        loss_fn = loss_cls(**loss_params)
 
         # Build optimizer via registry
         opt_cfg = cfg.optimizer
         optim_cls = OPTIMIZER_REGISTRY.get(opt_cfg.name)
         if optim_cls is None:
             raise ValueError(f"Unknown optimizer: {opt_cfg.name}")
-        optimizer = optim_cls(model.parameters(), **(opt_cfg.params or {}))
+        optim_params = {} if opt_cfg.params in (None, "None", "none") \
+            else opt_cfg.params
+        optimizer = optim_cls(model.parameters(), **optim_params)
 
         # Build scheduler via registry
         sched_cfg = cfg.scheduler
@@ -71,7 +75,9 @@ def main() -> None:
             sched_cls = SCHEDULER_REGISTRY.get(sched_cfg.name)
             if sched_cls is None:
                 raise ValueError(f"Unknown scheduler: {sched_cfg.name}")
-            scheduler = sched_cls(optimizer, **(sched_cfg.params or {}))
+            sched_params = {} if sched_cfg.params in (None, "None", "none") \
+                else sched_cfg.params
+            scheduler = sched_cls(optimizer, **sched_params)
         else:
             scheduler = None
 
