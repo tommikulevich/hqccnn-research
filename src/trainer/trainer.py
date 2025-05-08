@@ -328,7 +328,7 @@ class Trainer:
             cm_path = Path(self.log_dir) / 'confusion_matrix.npy'
             np.save(cm_path, cm)
             self.writer.add_artifact(str(cm_path))
-            self.writer.add_text('confusion_matrix', np.array2string(cm),
+            self.writer.add_text(np.array2string(cm),
                                  text_path='confusion_matrix.txt')
             self.evaluate_random_sample()
 
