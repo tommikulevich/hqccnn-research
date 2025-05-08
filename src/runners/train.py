@@ -2,7 +2,7 @@
 from dataprep.dataset_tools import get_dataloaders
 from trainer.trainer import Trainer
 from utils.seeds import set_seeds
-from config.config import Config
+from config.schema import Config
 from config.enums import SchedulerName
 from config.registry import (
     MODEL_REGISTRY, DATASET_REGISTRY, SEARCH_REGISTRY,

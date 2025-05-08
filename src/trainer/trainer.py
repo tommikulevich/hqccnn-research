@@ -16,7 +16,7 @@ import numpy as np
 from sklearn.metrics import accuracy_score, precision_score, \
                             recall_score, f1_score, confusion_matrix
 
-from config.config import Config
+from config.schema import Config
 from utils.common import flatten_dict
 from utils.logger import setup_logging, get_mlflow_writer, CSVLogger
 

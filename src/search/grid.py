@@ -3,7 +3,7 @@ import copy
 from itertools import product
 from typing import Callable
 
-from config.config import Config
+from config.schema import Config
 
 
 def grid_search(cfg: Config, run_fn: Callable):

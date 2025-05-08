@@ -3,7 +3,8 @@ import argparse
 
 from runners.inference import run_inference
 from runners.train import run_train
-from config.config import load_config, Config
+from config.schema import Config
+from config.loader import load_config
 
 
 def main() -> None:

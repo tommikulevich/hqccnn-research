@@ -10,7 +10,7 @@ import torch
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 
-from config.config import Config
+from config.schema import Config
 from config.registry import MODEL_REGISTRY
 
 

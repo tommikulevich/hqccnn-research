@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader, Subset, ConcatDataset
 from torchvision import transforms
 from torchvision.datasets import ImageFolder, VisionDataset
 
-from config.config import DataConfig
+from config.schema import DataConfig
 
 
 def get_dataloaders(cfg: DataConfig, dataset_cls: VisionDataset,
