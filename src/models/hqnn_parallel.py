@@ -1,5 +1,5 @@
 """Hybrid QNN Parallel model."""
-from typing import List, Callable
+from typing import List
 
 import torch
 import torch.nn as nn
@@ -7,21 +7,39 @@ import pennylane as qml
 from pennylane.qnn import TorchLayer
 
 
-dev: qml.device = None
+class QLayer(nn.Module):
+    def __init__(self, num_qubits: int, num_qreps: int,
+                 device_name: str = "default.qubit",
+                 diff_method: str = "best"):
+        super().__init__()
 
+        self.num_qubits = num_qubits
+        self.num_qreps = num_qreps
 
-def get_quantum_circuit(wires: int, qdevice: str,
-                        qdiff_method: str) -> Callable:
-    """Wrap a PennyLane device into a torch-compatible QNode."""
-    device = qml.device(qdevice, wires=wires) if dev is None else dev
+        self.qdevice = qml.device(device_name, wires=num_qubits)
+        self.qnode = qml.QNode(self._circuit,
+                               device=self.qdevice,
+                               interface="torch",
+                               diff_method=diff_method)
 
-    @qml.qnode(device, interface='torch', diff_method=qdiff_method)
-    def quantum_circuit(inputs, weights):
-        qml.AngleEmbedding(inputs, rotation='X', wires=list(range(wires)))
-        qml.StronglyEntanglingLayers(weights, wires=list(range(wires)))
-        return [qml.expval(qml.PauliY(wires=w)) for w in range(wires)]
+        weight_shapes = {
+            "weights": qml.StronglyEntanglingLayers.shape(
+                n_layers=num_qreps, n_wires=num_qubits
+            )
+        }
 
-    return quantum_circuit
+        self.qlayer = TorchLayer(self.qnode, weight_shapes)
+
+    def _circuit(self, inputs, weights):
+        qml.AngleEmbedding(inputs, rotation="X",
+                           wires=list(range(self.num_qubits)))
+        qml.StronglyEntanglingLayers(weights,
+                                     wires=list(range(self.num_qubits)))
+        return [qml.expval(qml.PauliY(wires=i))
+                for i in range(self.num_qubits)]
+
+    def forward(self, x):
+        return self.qlayer(x)
 
 
 class HQNN_Parallel(nn.Module):
@@ -30,7 +48,7 @@ class HQNN_Parallel(nn.Module):
                  conv_channels: List[int], conv_kernels: List[int],
                  conv_strides: List[int], conv_paddings: List[int],
                  pool_sizes: List[int], num_qubits: int,
-                 num_qlayers: int, num_qrepetitions: int,
+                 num_qlayers: int, num_qreps: int,
                  qdevice: str, qdiff_method: str) -> None:
         super().__init__()
 
@@ -74,12 +92,9 @@ class HQNN_Parallel(nn.Module):
         )
 
         # Quantum layers
-        weight_shapes = {"weights": qml.StronglyEntanglingLayers.shape(
-            n_layers=num_qrepetitions, n_wires=num_qubits)}
-        circuit = get_quantum_circuit(num_qubits, qdevice, qdiff_method)
-
         self.qlayers = nn.ModuleList([
-            TorchLayer(circuit, weight_shapes)
+            QLayer(num_qubits=num_qubits, num_qreps=num_qreps,
+                   device_name=qdevice, diff_method=qdiff_method)
             for _ in range(num_qlayers)
         ])
 
