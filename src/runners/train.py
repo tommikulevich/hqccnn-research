@@ -1,6 +1,6 @@
 """Script to train HQNN_Parallel models."""
 from dataprep.dataset_tools import get_dataloaders
-from trainers.trainer import Trainer
+from trainer.trainer import Trainer
 from utils.seeds import set_seeds
 from config.config import Config
 from config.enums import SchedulerName
