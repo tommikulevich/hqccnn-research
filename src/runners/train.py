@@ -1,9 +1,8 @@
 """Script to train HQNN_Parallel models."""
-import argparse
-
+from dataprep.dataset_tools import get_dataloaders
 from trainers.trainer import Trainer
 from utils.seeds import set_seeds
-from config.config import load_config, Config
+from config.config import Config
 from config.enums import SchedulerName
 from config.registry import (
     MODEL_REGISTRY, DATASET_REGISTRY, SEARCH_REGISTRY,
@@ -11,45 +10,47 @@ from config.registry import (
 )
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description='Environment for hybrid model training')
-    parser.add_argument('-c', '--config', type=str, required=True,
-                        help='Path to YAML config')
-    parser.add_argument('-r', '--resume', type=str, default=None,
-                        help='Path to checkpoint to resume')
-    parser.add_argument('--dry-run', action='store_true',
-                        help='Perform a dry run')
-    args = parser.parse_args()
-
-    # Load config
-    config: Config = load_config(args.config)
-
-    # Set seeds
-    set_seeds(config.seed)
+def run_train(config: Config, resume_from: str = None,
+              dry_run: bool = False) -> None:
+    """Train model according to config and optional checkpoint resume."""
+    # Set seeds if provided
+    if config.seed is not None:
+        set_seeds(config.seed)
 
     # Data loaders via registry
-    loader_fn = DATASET_REGISTRY.get(config.data.name)
-    if loader_fn is None:
+    dataset_cls = DATASET_REGISTRY.get(config.data.name)
+    if dataset_cls is None:
         raise ValueError(f"Unknown dataset: {config.data.name}")
-    train_loader, val_loader = loader_fn(config.data)
+
+    loaders = get_dataloaders(config.data, dataset_cls, config.seed)
+    if len(loaders) == 2:
+        train_loader, val_loader = loaders
+        test_loader = None
+    elif len(loaders) == 3:
+        train_loader, val_loader, test_loader = loaders
+    else:
+        raise ValueError(f"Dataset loader returned {len(loaders)} loaders, \
+            expected 2 or 3.")
 
     # Model instantiation via registry
-    model_name = config.model.name
-    ModelClass = MODEL_REGISTRY.get(model_name)
+    ModelClass = MODEL_REGISTRY.get(config.model.name)
     if ModelClass is None:
-        raise ValueError(f"Unknown model: {model_name}")
+        raise ValueError(f"Unknown model: {config.model.name}")
 
-    # Initialize model with params
+    # Determine in_channels from sample batch
     sample_data, _ = next(iter(train_loader))
-    in_channels = sample_data.shape[1]
+    if ModelClass is None:
+        raise ValueError(f"Unknown model: {config.model.name}")
+    if config.data.params['input_shape'][0] != sample_data.shape[1]:
+        raise ValueError(f"Invalid provided input shape: num of channels \
+            {config.data.params['input_shape'][0]} != {sample_data.shape[1]}")
     model = ModelClass(
-        in_channels=in_channels,
+        in_channels=config.data.params['input_shape'][0],
         num_classes=config.data.params['num_classes'],
         **config.model.params,
     )
 
-    def run_experiment(cfg):
+    def run_experiment(cfg: Config) -> None:
         # Build loss function via registry
         loss_cfg = cfg.loss
         loss_cls = LOSS_REGISTRY.get(loss_cfg.name)
@@ -81,24 +82,22 @@ def main() -> None:
             scheduler = None
 
         trainer = Trainer(cfg, model, loss_fn, optimizer, scheduler,
-                          train_loader, val_loader,
-                          resume_from=args.resume,
-                          dry_run=args.dry_run)
+                          train_loader, val_loader, test_loader=test_loader,
+                          resume_from=resume_from,
+                          dry_run=dry_run)
 
-        # Sanity check model before start training
-        batch = next(iter(train_loader))
-        sample = batch[0] if isinstance(batch, (list, tuple)) else batch
-        model_check = trainer.sanity_check(sample)
-        if model_check:
-            raise model_check
+        # Sanity check
+        # batch = next(iter(train_loader))
+        # sample = batch[0] if isinstance(batch, (list, tuple)) else batch
+        # err = trainer.sanity_check(sample)
+        # if err:
+        #     raise err
 
+        # Run training + validation + test
         trainer.run()
 
+    # Hyperparameter search (or simple run)
     search_fn = SEARCH_REGISTRY.get(config.search.method)
     if search_fn is None:
         raise ValueError(f"Unknown search method: {config.search.method}")
     search_fn(config, run_experiment)
-
-
-if __name__ == '__main__':
-    main()

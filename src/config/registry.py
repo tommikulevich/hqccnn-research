@@ -1,6 +1,7 @@
 """Registries for models, optimizers, schedulers, searches, datasets etc."""
 from torch.optim import Adam, SGD
 from torch.nn import CrossEntropyLoss
+from torchvision import datasets
 
 from models.hqnn_parallel import HQNN_Parallel
 from search.grid import grid_search
@@ -9,12 +10,12 @@ from config.enums import (DatasetName, ModelName, LossName,
 
 
 DATASET_REGISTRY = {
-    DatasetName.MNIST: get_dataloaders,
-    DatasetName.FASHION_MNIST: get_dataloaders,
-    DatasetName.CIFAR10: get_dataloaders,
-    DatasetName.CIFAR100: get_dataloaders,
-    DatasetName.EUROSAT: get_dataloaders,
-    DatasetName.CUSTOM: get_dataloaders,
+    DatasetName.MNIST: datasets.MNIST,
+    DatasetName.FASHION_MNIST: datasets.FashionMNIST,
+    DatasetName.CIFAR10: datasets.CIFAR10,
+    DatasetName.CIFAR100: datasets.CIFAR100,
+    DatasetName.EUROSAT: datasets.EuroSAT,
+    DatasetName.CUSTOM: datasets.ImageFolder,
 }
 
 MODEL_REGISTRY = {

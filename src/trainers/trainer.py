@@ -1,11 +1,12 @@
 """Trainer module for training and evaluating models."""
 import os
+import psutil
 import zipfile
 from tqdm import tqdm
 from datetime import datetime
 from pathlib import Path
 from dataclasses import dataclass, asdict
-from typing import Optional
+from typing import Optional, Any
 
 import torch
 import torch.nn as nn
@@ -13,7 +14,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 import numpy as np
 from sklearn.metrics import accuracy_score, precision_score, \
-                            recall_score, f1_score
+                            recall_score, f1_score, confusion_matrix
 
 from config.config import Config
 from utils.common import flatten_dict
@@ -45,12 +46,14 @@ class Trainer:
                  scheduler: Optional[torch.optim.lr_scheduler._LRScheduler],
                  train_loader: DataLoader,
                  val_loader: DataLoader,
+                 test_loader: Optional[DataLoader] = None,
                  resume_from: Optional[str] = None,
                  dry_run: bool = False) -> None:
         self.config = config
         self.model = model.to(config.training.device)
         self.train_loader = train_loader
         self.val_loader = val_loader
+        self.test_loader = test_loader
         self.dry_run = dry_run
 
         self.device = config.training.device
@@ -224,6 +227,69 @@ class Trainer:
                                       np.array(all_targets))
         return Metrics(loss=float(np.mean(losses)), **stats)
 
+    def test(self) -> tuple[Metrics, Any]:
+        """Run testing and compute metrics and confusion matrix."""
+        if self.test_loader is None:
+            self.logger.warning("No test loader provided.")
+            return
+
+        self.model.eval()
+
+        losses, all_preds, all_targets = [], [], []
+        with torch.no_grad():
+            for data, target in tqdm(self.test_loader, desc='Test'):
+                data = data.to(self.device)
+                target = target.to(self.device)
+
+                output = self.model(data)
+                loss = self.loss_fn(output, target)
+                losses.append(loss.item())
+
+                preds = output.argmax(dim=1).cpu().numpy().tolist()
+                all_preds.extend(preds)
+                all_targets.extend(target.cpu().numpy().tolist())
+
+        stats = self._compute_metrics(np.array(all_preds),
+                                      np.array(all_targets))
+        cm = confusion_matrix(all_targets, all_preds)
+
+        return Metrics(loss=float(np.mean(losses)), **stats), cm
+
+    def evaluate_random_sample(self) -> None:
+        """Evaluate a single random sample from test set."""
+        if self.test_loader is None:
+            self.logger.warning("No test loader for sample evaluation.")
+            return
+
+        idx = np.random.randint(len(self.test_loader.dataset))
+        sample, target = self.test_loader.dataset[idx]
+
+        self.model.eval()
+        with torch.no_grad():
+            input_tensor = sample.to(self.device).unsqueeze(0)
+            output = self.model(input_tensor)
+            pred = output.argmax(dim=1).item()
+
+        self.logger.info(f"Random sample eval - target: {target}, \
+            prediction: {pred}")
+
+    def _log_resource_usage(self, step: int) -> None:
+        """Log CPU and GPU memory usage."""
+        process = psutil.Process()
+        mem = process.memory_info().rss
+        self.writer.add_scalar('resource/cpu_memory_rss', mem, step)
+        self.logger.info(f"CPU memory RSS: {mem}")
+
+        if self.device.lower() == 'cuda':
+            gpu_mem_alloc = torch.cuda.memory_allocated(self.device)
+            gpu_mem_reserved = torch.cuda.memory_reserved(self.device)
+            self.writer.add_scalar('resource/gpu_memory_allocated',
+                                   gpu_mem_alloc, step)
+            self.writer.add_scalar('resource/gpu_memory_reserved',
+                                   gpu_mem_reserved, step)
+            self.logger.info(f"GPU memory allocated: {gpu_mem_alloc}, \
+                reserved: {gpu_mem_reserved}")
+
     def run(self) -> None:
         """Execute full training and validation cycles."""
         self.logger.info(f'Configuration: {self.config}')
@@ -248,8 +314,23 @@ class Trainer:
             if epoch % self.config.logging.save_interval == 0:
                 self._save_checkpoint(epoch)
 
+            self._log_resource_usage(epoch)
+
             if self.dry_run:
                 break
+
+        if self.test_loader is not None and not self.dry_run:
+            test_metrics, cm = self.test()
+            for k, v in asdict(test_metrics).items():
+                self.writer.add_scalar(f'test/{k}', v,
+                                       self.config.training.epochs)
+            self.logger.info(f"Test metrics: {asdict(test_metrics)}")
+            cm_path = Path(self.log_dir) / 'confusion_matrix.npy'
+            np.save(cm_path, cm)
+            self.writer.add_artifact(str(cm_path))
+            self.writer.add_text('confusion_matrix', np.array2string(cm),
+                                 text_path='confusion_matrix.txt')
+            self.evaluate_random_sample()
 
         self.writer.add_artifact(str(self.log_file))
         self.writer.add_artifact(str(self.train_csv.csv_path))

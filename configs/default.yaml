@@ -1,6 +1,6 @@
 version: "1.0"
 
-seed: 187720
+seed: 2025
 
 logging:
   log_dir: outputs/logs
@@ -16,6 +16,18 @@ data:
     num_workers: 4
     batch_size: 64
     dry_run_batches: 2
+    input_shape: [1, 28, 28]
+    split:
+      train: 0.7
+      val: 0.15
+      test: 0.15
+    transforms:
+      train:
+        - name: ToTensor
+      val:
+        - name: ToTensor
+      test:
+        - name: ToTensor
 
 model:
   name: hqnn-parallel
@@ -43,7 +55,7 @@ optimizer:
   name: adam
   params:
     lr: 0.001
-    weight_decay: 0.00001
+    weight_decay: 0.0001
 
 scheduler:
   name: none
