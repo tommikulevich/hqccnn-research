@@ -30,3 +30,4 @@ class SchedulerName(str, Enum):
 
 class SearchMethod(str, Enum):
     NONE = "none"
+    GRID = "grid"

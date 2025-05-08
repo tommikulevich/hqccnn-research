@@ -3,7 +3,7 @@ from torch.optim import Adam, SGD
 from torch.nn import CrossEntropyLoss
 
 from models.hqnn_parallel import HQNN_Parallel
-from data_processing.dataset_tools import get_dataloaders
+from search.grid import grid_search
 from config.enums import (DatasetName, ModelName, LossName,
                           OptimizerName, SearchMethod)
 
@@ -38,4 +38,5 @@ SCHEDULER_REGISTRY = {
 
 SEARCH_REGISTRY = {
     SearchMethod.NONE: lambda cfg, fn: fn(cfg),
+    SearchMethod.GRID: grid_search,
 }
