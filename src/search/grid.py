@@ -18,7 +18,8 @@ def grid_search(cfg: Config, run_fn: Callable):
         for v in grid_params.values()
     ]
 
-    print("Possibilities: ", zip(keys, product(*values_list)))
+    print("Possibilities: ", [dict(zip(keys, combo))
+                              for combo in product(*values_list)])
     for combo in product(*values_list):
         cfg_copy = copy.deepcopy(cfg)
         for key, val in zip(keys, combo):
