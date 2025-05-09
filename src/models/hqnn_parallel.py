@@ -1,4 +1,5 @@
 """Hybrid QNN Parallel model."""
+import math
 from typing import List
 
 import torch
@@ -102,20 +103,16 @@ class HQNN_Parallel(nn.Module):
         ])
 
         # Classical linear layer
-        self.fc_block2 = nn.Sequential(
-            nn.LazyLinear(out_features=num_classes),
-            nn.BatchNorm1d(num_features=num_classes),
-            nn.ReLU()
-        )
+        self.fc_block2 = nn.LazyLinear(out_features=num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         for conv_block in self.conv_blocks:
             x = conv_block(x)
 
         x = self.flatten(x)
-
         x = self.fc_block1(x)
 
+        x = torch.sigmoid(x) * math.pi
         x_c = x.chunk(self.num_qlayers, dim=1)
         q = [layer(c) for layer, c in zip(self.qlayers, x_c)]
         x = torch.cat(q, dim=1)
