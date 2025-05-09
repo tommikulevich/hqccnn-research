@@ -14,17 +14,17 @@ def run_train(config: Config, resume_from: str = None,
               dry_run: bool = False) -> None:
     """Train model according to config and optional checkpoint resume."""
 
-    def run_experiment(cfg: Config) -> None:
+    def _run_experiment(cfg: Config) -> None:
         # Set seeds if provided
-        if config.seed is not None:
-            set_seeds(config.seed)
+        if cfg.seed is not None:
+            set_seeds(cfg.seed)
 
         # Data loaders via registry
-        dataset_cls = DATASET_REGISTRY.get(config.data.name)
+        dataset_cls = DATASET_REGISTRY.get(cfg.data.name)
         if dataset_cls is None:
-            raise ValueError(f"Unknown dataset: {config.data.name}")
+            raise ValueError(f"Unknown dataset: {cfg.data.name}")
 
-        loaders = get_dataloaders(config.data, dataset_cls, config.seed)
+        loaders = get_dataloaders(cfg.data, dataset_cls, cfg.seed)
         if len(loaders) == 2:
             train_loader, val_loader = loaders
             test_loader = None
@@ -35,22 +35,22 @@ def run_train(config: Config, resume_from: str = None,
                 expected 2 or 3.")
 
         # Model instantiation via registry
-        ModelClass = MODEL_REGISTRY.get(config.model.name)
+        ModelClass = MODEL_REGISTRY.get(cfg.model.name)
         if ModelClass is None:
-            raise ValueError(f"Unknown model: {config.model.name}")
+            raise ValueError(f"Unknown model: {cfg.model.name}")
 
         # Determine in_channels from sample batch
         sample_data, _ = next(iter(train_loader))
         if ModelClass is None:
-            raise ValueError(f"Unknown model: {config.model.name}")
-        if config.data.params['input_shape'][0] != sample_data.shape[1]:
+            raise ValueError(f"Unknown model: {cfg.model.name}")
+        if cfg.data.params['input_shape'][0] != sample_data.shape[1]:
             raise ValueError(f"Invalid provided input shape: num of channels \
-                {config.data.params['input_shape'][0]} \
+                {cfg.data.params['input_shape'][0]} \
                     != {sample_data.shape[1]}")
         model = ModelClass(
-            in_channels=config.data.params['input_shape'][0],
-            num_classes=config.data.params['num_classes'],
-            **config.model.params,
+            in_channels=cfg.data.params['input_shape'][0],
+            num_classes=cfg.data.params['num_classes'],
+            **cfg.model.params,
         )
 
         # Build loss function via registry
@@ -102,4 +102,4 @@ def run_train(config: Config, resume_from: str = None,
     search_fn = SEARCH_REGISTRY.get(config.search.method)
     if search_fn is None:
         raise ValueError(f"Unknown search method: {config.search.method}")
-    search_fn(config, run_experiment)
+    search_fn(config, _run_experiment)
