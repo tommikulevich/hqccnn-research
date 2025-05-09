@@ -31,7 +31,7 @@ def run_train(config: Config, resume_from: str = None,
         elif len(loaders) == 3:
             train_loader, val_loader, test_loader = loaders
         else:
-            raise ValueError(f"Dataset loader returned {len(loaders)} loaders, \
+            raise ValueError(f"Dataset loader returned {len(loaders)} loaders,\
                 expected 2 or 3.")
 
         # Model instantiation via registry
@@ -45,7 +45,8 @@ def run_train(config: Config, resume_from: str = None,
             raise ValueError(f"Unknown model: {config.model.name}")
         if config.data.params['input_shape'][0] != sample_data.shape[1]:
             raise ValueError(f"Invalid provided input shape: num of channels \
-                {config.data.params['input_shape'][0]} != {sample_data.shape[1]}")
+                {config.data.params['input_shape'][0]} \
+                    != {sample_data.shape[1]}")
         model = ModelClass(
             in_channels=config.data.params['input_shape'][0],
             num_classes=config.data.params['num_classes'],
