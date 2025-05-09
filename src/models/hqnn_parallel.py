@@ -57,31 +57,34 @@ class HQNN_Parallel(nn.Module):
         self.num_q_features = num_qlayers * num_qubits
 
         # Classical convolutional and linear layers
-        self.conv_block1 = nn.Sequential(
-            nn.Conv2d(
-                in_channels=in_channels,
-                out_channels=conv_channels[0],
-                kernel_size=conv_kernels[0],
-                stride=conv_strides[0],
-                padding=conv_paddings[0]
-            ),
-            nn.BatchNorm2d(num_features=conv_channels[0]),
-            nn.ReLU()
-        )
-        self.pool1 = nn.MaxPool2d(kernel_size=pool_sizes[0])
+        n_conv = len(conv_channels)
+        assert len(conv_kernels) == n_conv, \
+            "conv_kernels must have the same length as conv_channels"
+        assert len(conv_strides) == n_conv, \
+            "conv_strides must have the same length as conv_channels"
+        assert len(conv_paddings) == n_conv, \
+            "conv_paddings must have the same length as conv_channels"
+        assert len(pool_sizes) == n_conv, \
+            "pool_sizes must have the same length as conv_channels"
 
-        self.conv_block2 = nn.Sequential(
-            nn.Conv2d(
-                in_channels=conv_channels[0],
-                out_channels=conv_channels[1],
-                kernel_size=conv_kernels[1],
-                stride=conv_strides[1],
-                padding=conv_paddings[1]
-            ),
-            nn.BatchNorm2d(num_features=conv_channels[1]),
-            nn.ReLU()
-        )
-        self.pool2 = nn.MaxPool2d(kernel_size=pool_sizes[1])
+        self.conv_blocks = nn.ModuleList()
+        prev_ch = in_channels
+        for i in range(n_conv):
+            out_ch = conv_channels[i]
+            k = conv_kernels[i]
+            s = conv_strides[i]
+            p = conv_paddings[i]
+            pool_k = pool_sizes[i]
+
+            block = nn.Sequential(
+                nn.Conv2d(prev_ch, out_ch, kernel_size=k,
+                          stride=s, padding=p),
+                nn.BatchNorm2d(out_ch),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=pool_k),
+            )
+            self.conv_blocks.append(block)
+            prev_ch = out_ch
 
         self.flatten = nn.Flatten(start_dim=1)
 
@@ -106,11 +109,8 @@ class HQNN_Parallel(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.conv_block1(x)
-        x = self.pool1(x)
-
-        x = self.conv_block2(x)
-        x = self.pool2(x)
+        for conv_block in self.conv_blocks:
+            x = conv_block(x)
 
         x = self.flatten(x)
 
