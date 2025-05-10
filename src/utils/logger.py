@@ -40,7 +40,8 @@ class MLflowWriter:
         mlflow.set_tracking_uri(tracking_uri)
         mlflow.set_experiment(experiment_name)
 
-        self.run = mlflow.start_run(run_name=f"run_{ts}")
+        self.run = mlflow.start_run(run_name=f"run_{ts}",
+                                    log_system_metrics=True)
 
     def add_scalar(self, tag: str, value: float, step: int = None):
         """Log a single scalar metric to MLflow."""

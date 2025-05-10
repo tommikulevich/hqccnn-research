@@ -273,23 +273,6 @@ class Trainer:
         self.logger.info(f"Random sample eval - target: {target}, \
             prediction: {pred}")
 
-    def _log_resource_usage(self, step: int) -> None:
-        """Log CPU and GPU memory usage."""
-        process = psutil.Process()
-        mem = process.memory_info().rss
-        self.writer.add_scalar('resource/cpu_memory_rss', mem, step)
-        self.logger.info(f"CPU memory RSS: {mem}")
-
-        if self.device.lower() == 'cuda':
-            gpu_mem_alloc = torch.cuda.memory_allocated(self.device)
-            gpu_mem_reserved = torch.cuda.memory_reserved(self.device)
-            self.writer.add_scalar('resource/gpu_memory_allocated',
-                                   gpu_mem_alloc, step)
-            self.writer.add_scalar('resource/gpu_memory_reserved',
-                                   gpu_mem_reserved, step)
-            self.logger.info(f"GPU memory allocated: {gpu_mem_alloc}, \
-                reserved: {gpu_mem_reserved}")
-
     def run(self) -> None:
         """Execute full training and validation cycles."""
         self.logger.info(f'Configuration: {self.config}')
@@ -313,8 +296,6 @@ class Trainer:
 
             if epoch % self.config.logging.save_interval == 0:
                 self._save_checkpoint(epoch)
-
-            self._log_resource_usage(epoch)
 
             if self.dry_run:
                 break
