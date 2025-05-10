@@ -1,6 +1,5 @@
 """Trainer module for training and evaluating models."""
 import os
-import psutil
 import zipfile
 from tqdm import tqdm
 from datetime import datetime
@@ -78,8 +77,20 @@ class Trainer:
         self.optimizer = optimizer
         self.scheduler = scheduler
 
+        # Useful log info
         self.logger.info(f"<<< RUN {ts} >>>")
         self.logger.info("> Model: \n%s", model)
+        self.logger.info("> Total trainable parameters: %s",
+                         sum(p.numel() for p in model.parameters()
+                             if p.requires_grad))
+        self.logger.info("> Parameters by top-level module: ")
+        for name, module in model.named_children():
+            n = sum(p.numel() for p in module.parameters() if p.requires_grad)
+            self.logger.info(f"  {name}: {n}")
+        self.logger.info("> Parameters by individual tensor: ")
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                self.logger.info(f"  {name}: {param.numel()}")
         self.logger.info("> Loss function: \n%s", self.loss_fn)
         self.logger.info("> Optimizer: \n%s", self.optimizer)
         self.logger.info("> Scheduler: \n%s", self.scheduler)

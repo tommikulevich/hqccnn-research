@@ -1,6 +1,6 @@
 """Hybrid QNN Parallel model."""
 import math
-from typing import List
+from typing import List, Tuple
 
 import torch
 import torch.nn as nn
@@ -46,6 +46,7 @@ class QLayer(nn.Module):
 class HQNN_Parallel(nn.Module):
     """HQNN_Parallel model combining classical CNN and quantum layers."""
     def __init__(self, in_channels: int, num_classes: int,
+                 input_size: Tuple[int, int, int],
                  conv_channels: List[int], conv_kernels: List[int],
                  conv_strides: List[int], conv_paddings: List[int],
                  pool_sizes: List[int], num_qubits: int,
@@ -69,6 +70,7 @@ class HQNN_Parallel(nn.Module):
             "pool_sizes must have the same length as conv_channels"
 
         self.conv_blocks = nn.ModuleList()
+        _, h, w = input_size
         prev_ch = in_channels
         for i in range(n_conv):
             out_ch = conv_channels[i]
@@ -87,10 +89,19 @@ class HQNN_Parallel(nn.Module):
             self.conv_blocks.append(block)
             prev_ch = out_ch
 
+            # After conv
+            h = (h + 2 * p - k) // s + 1
+            w = (w + 2 * p - k) // s + 1
+
+            # After pool
+            h = (h - pool_k) // pool_k + 1
+            w = (w - pool_k) // pool_k + 1
+
         self.flatten = nn.Flatten(start_dim=1)
+        flat_dim = prev_ch * h * w
 
         self.fc_block1 = nn.Sequential(
-            nn.LazyLinear(out_features=self.num_q_features),
+            nn.Linear(in_features=flat_dim, out_features=self.num_q_features),
             nn.BatchNorm1d(num_features=self.num_q_features),
             nn.ReLU()
         )
@@ -103,7 +114,8 @@ class HQNN_Parallel(nn.Module):
         ])
 
         # Classical linear layer
-        self.fc_block2 = nn.LazyLinear(out_features=num_classes)
+        self.fc_block2 = nn.Linear(in_features=self.num_q_features,
+                                   out_features=num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         for conv_block in self.conv_blocks:

@@ -50,6 +50,7 @@ def run_train(config: Config, resume_from: str = None,
         model = ModelClass(
             in_channels=cfg.data.params['input_shape'][0],
             num_classes=cfg.data.params['num_classes'],
+            input_size=cfg.data.params['input_shape'],
             **cfg.model.params,
         )
 
