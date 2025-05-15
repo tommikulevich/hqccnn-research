@@ -14,6 +14,7 @@ class DatasetName(str, Enum):
 class ModelName(str, Enum):
     HQNN_PARALLEL = "hqnn-parallel"
     HQNN_PARALLEL_CLASSIC_CNN = "hqnn-parallel-classic-cnn"
+    HQNN_QUANV = "hqnn-quanv"
 
 
 class LossName(str, Enum):
