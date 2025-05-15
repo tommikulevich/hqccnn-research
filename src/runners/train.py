@@ -40,6 +40,7 @@ def run_train(config: Config, resume_from: str = None,
             raise ValueError(f"Unknown model: {cfg.model.name}")
 
         # Determine in_channels from sample batch
+        # TODO: fix input_shape (include resize)
         sample_data, _ = next(iter(train_loader))
         if ModelClass is None:
             raise ValueError(f"Unknown model: {cfg.model.name}")

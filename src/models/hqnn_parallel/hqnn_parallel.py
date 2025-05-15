@@ -11,7 +11,7 @@ from pennylane.qnn import TorchLayer
 class QLayer(nn.Module):
     def __init__(self, num_qubits: int, num_qreps: int,
                  device_name: str = "default.qubit",
-                 diff_method: str = "best"):
+                 diff_method: str = "best") -> None:
         super().__init__()
 
         self.num_qubits = num_qubits
@@ -31,7 +31,8 @@ class QLayer(nn.Module):
 
         self.qlayer = TorchLayer(self.qnode, weight_shapes)
 
-    def _circuit(self, inputs, weights):
+    def _circuit(self, inputs: torch.Tensor, weights: torch.Tensor) \
+            -> List[torch.Tensor]:
         qml.AngleEmbedding(inputs, rotation="X",
                            wires=list(range(self.num_qubits)))
         qml.StronglyEntanglingLayers(weights,
@@ -39,7 +40,7 @@ class QLayer(nn.Module):
         return [qml.expval(qml.PauliY(wires=i))
                 for i in range(self.num_qubits)]
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.qlayer(x)
 
 
