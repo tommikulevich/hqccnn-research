@@ -1,4 +1,4 @@
-"""Script to train HQNN_Parallel models."""
+"""Start script."""
 import argparse
 
 from runners.inference import run_inference

@@ -110,6 +110,7 @@ def run_inference(config: Config, checkpoint_path: str, input_path: str,
     model = ModelClass(
         in_channels=in_channels,
         num_classes=config.data.params['num_classes'],
+        input_size=config.data.params['input_shape'],
         **config.model.params,
     )
 
