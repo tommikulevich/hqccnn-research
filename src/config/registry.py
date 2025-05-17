@@ -6,6 +6,7 @@ from torchvision import datasets
 from models.hqnn_parallel.hqnn_parallel import HQNN_Parallel
 from models.hqnn_parallel.cnn import HQNN_Parallel_Classic_CNN
 from models.hqnn_quanv.hqnn_quanv import HQNN_Quanv
+from models.hqnn_quanv.cnn import HQNN_Quanv_Classic_CNN
 from search.grid import grid_search
 from config.enums import (DatasetName, ModelName, LossName,
                           OptimizerName, SearchMethod)
@@ -23,7 +24,8 @@ DATASET_REGISTRY = {
 MODEL_REGISTRY = {
     ModelName.HQNN_PARALLEL: HQNN_Parallel,
     ModelName.HQNN_PARALLEL_CLASSIC_CNN: HQNN_Parallel_Classic_CNN,
-    ModelName.HQNN_QUANV: HQNN_Quanv
+    ModelName.HQNN_QUANV: HQNN_Quanv,
+    ModelName.HQNN_QUANV_CLASSIC_CNN: HQNN_Quanv_Classic_CNN
 }
 
 LOSS_REGISTRY = {
