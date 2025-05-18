@@ -13,8 +13,8 @@ class Quanv(nn.Module):
     def __init__(self, in_channels: int, kernel_size: int,
                  stride: int, padding: int,
                  num_qubits: int, num_qreps: int,
-                 qdevice: str = "default.qubit",
-                 qdiff_method: str = "best") -> None:
+                 device_name: str = "default.qubit",
+                 diff_method: str = "best") -> None:
         super().__init__()
 
         self.in_channels = in_channels
@@ -29,11 +29,11 @@ class Quanv(nn.Module):
         assert self.num_qubits == self.n_inputs, \
             "num_qubits must equal in_channels*kernel_size*kernel_size"
 
-        self.qdevice = qml.device(qdevice, wires=self.num_qubits)
+        self.qdevice = qml.device(device_name, wires=self.num_qubits)
         self.qnode = qml.QNode(self._circuit,
                                device=self.qdevice,
                                interface="torch",
-                               qdiff_method=qdiff_method)
+                               diff_method=diff_method)
 
         weight_shapes = {
             "weights": qml.StronglyEntanglingLayers.shape(
@@ -119,8 +119,8 @@ class HQNN_Quanv(nn.Module):
             block = nn.Sequential(
                 Quanv(in_channels=prev_ch, num_qubits=out_ch, kernel_size=k,
                       stride=s, padding=p,
-                      num_qreps=num_qreps, qdevice=qdevice,
-                      qdiff_method=qdiff_method),
+                      num_qreps=num_qreps, device_name=qdevice,
+                      diff_method=qdiff_method),
                 nn.BatchNorm2d(out_ch),
                 nn.ReLU(),
                 nn.MaxPool2d(kernel_size=pool_k),
