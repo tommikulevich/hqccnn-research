@@ -7,6 +7,7 @@ from models.hqnn_parallel.hqnn_parallel import HQNN_Parallel
 from models.hqnn_parallel.cnn import HQNN_Parallel_Classic_CNN
 from models.hqnn_quanv.hqnn_quanv import HQNN_Quanv
 from models.hqnn_quanv.cnn import HQNN_Quanv_Classic_CNN
+from models.hcqtcnn_resnet34.hcqtcnn_resnet34 import HCQTCNN_ResNet34
 from search.grid import grid_search
 from config.enums import (DatasetName, ModelName, LossName,
                           OptimizerName, SearchMethod)
@@ -25,7 +26,8 @@ MODEL_REGISTRY = {
     ModelName.HQNN_PARALLEL: HQNN_Parallel,
     ModelName.HQNN_PARALLEL_CLASSIC_CNN: HQNN_Parallel_Classic_CNN,
     ModelName.HQNN_QUANV: HQNN_Quanv,
-    ModelName.HQNN_QUANV_CLASSIC_CNN: HQNN_Quanv_Classic_CNN
+    ModelName.HQNN_QUANV_CLASSIC_CNN: HQNN_Quanv_Classic_CNN,
+    ModelName.HCQTCNN_RESNET34: HCQTCNN_ResNet34
 }
 
 LOSS_REGISTRY = {
