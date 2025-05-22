@@ -24,32 +24,20 @@ class QLayer(nn.Module):
                                interface="torch",
                                diff_method=qdiff_method)
 
-        weight_shapes = {"weights": (num_qreps, num_qubits, 3)}
+        weight_shapes = {
+            "weights": qml.StronglyEntanglingLayers.shape(
+                n_layers=num_qreps, n_wires=num_qubits
+            )
+        }
 
         self.qlayer = TorchLayer(self.qnode, weight_shapes)
 
     def _circuit(self, inputs: torch.Tensor, weights: torch.Tensor) \
             -> List[torch.Tensor]:
-        # TODO: add num of repeats of IQP layers as argument
-
-        # 1) IQP embedding: H then RY(x_i) on each wire
-        for i in range(self.num_qubits):
-            qml.Hadamard(wires=i)
-            qml.RY(inputs[:, i], wires=i)
-
-        # 2) Ansatz: K (chain of CNOTs) + per-wire RX, RY, RZ
-        for layer in range(self.num_qreps):
-            # entangling unitary K: CNOT(0→1), CNOT(1→2), …
-            for i in range(self.num_qubits - 1):
-                qml.CNOT(wires=[i, i + 1])
-
-            # local rotations
-            for i in range(self.num_qubits):
-                qml.RX(weights[layer, i, 0], wires=i)
-                qml.RY(weights[layer, i, 1], wires=i)
-                qml.RZ(weights[layer, i, 2], wires=i)
-
-        # 3) Measurement: ⟨Z⟩ on each qubit
+        qml.AngleEmbedding(inputs, rotation="Y",
+                           wires=list(range(self.num_qubits)))
+        qml.StronglyEntanglingLayers(weights,
+                                     wires=list(range(self.num_qubits)))
         return [qml.expval(qml.PauliZ(wires=i))
                 for i in range(self.num_qubits)]
 
@@ -57,18 +45,18 @@ class QLayer(nn.Module):
         return self.qlayer(x)
 
 
-class TanhScale(nn.Module):
-    """tanh(x) * scale"""
+class SigmoidScale(nn.Module):
+    """sigmoid(x) * scale"""
     def __init__(self, scale: float = 1) -> None:
         super().__init__()
         self.scale = scale
-        self.tanh = nn.Tanh()
+        self.sigm = nn.Sigmoid()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.tanh(x) * self.scale
+        return self.sigm(x) * self.scale
 
 
-class HCQTCNN_ResNet34(nn.Module):
+class HCQTCNN(nn.Module):
     """HCQTCNN_ResNet combining pre-trained ResNet34 and quantum layer."""
     def __init__(self, in_channels: int, num_classes: int,
                  input_size: Tuple[int, int, int],
@@ -90,11 +78,15 @@ class HCQTCNN_ResNet34(nn.Module):
 
         # Linear to reduce ResNet feature dim to num_qubits inputs
         resnet_out_dim = resnet.fc.in_features
-        self.fc_reduce = nn.Linear(in_features=resnet_out_dim,
-                                   out_features=num_qubits)
+        self.fc_reduce = nn.Sequential(
+            nn.Linear(in_features=resnet_out_dim,
+                      out_features=num_qubits),
+            nn.BatchNorm1d(num_features=num_qubits),
+            nn.ReLU()
+        )
 
         # Quantum variational layer
-        self.tanh_scale = TanhScale(scale=math.pi)
+        self.sigm_scale = SigmoidScale(scale=math.pi)
         self.qlayer = QLayer(num_qubits=num_qubits, num_qreps=num_qreps,
                              qdevice=qdevice, qdiff_method=qdiff_method)
 
@@ -107,7 +99,7 @@ class HCQTCNN_ResNet34(nn.Module):
         x = self.flatten(x)
         x = self.fc_reduce(x)
 
-        x = self.tanh_scale(x)
+        x = self.sigm_scale(x)
         x = self.qlayer(x)
 
         x = self.fc_classifier(x)
