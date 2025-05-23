@@ -73,6 +73,10 @@ class HCQTCNN(nn.Module):
             *list(resnet.children())[:-1],
         )
 
+        # Freeze params in ResNet
+        for param in self.resnet_features.parameters():
+            param.requires_grad = False
+
         # Flatten output of ResNet34
         self.flatten = nn.Flatten(start_dim=1)
 
