@@ -11,18 +11,18 @@ from pennylane.qnn import TorchLayer
 
 class QLayer(nn.Module):
     def __init__(self, num_qubits: int, num_qreps: int,
-                 qdevice: str = "default.qubit",
-                 qdiff_method: str = "best"):
+                 device_name: str = "default.qubit",
+                 diff_method: str = "best") -> None:
         super().__init__()
 
         self.num_qubits = num_qubits
         self.num_qreps = num_qreps
 
-        self.qdevice = qml.device(qdevice, wires=num_qubits)
+        self.qdevice = qml.device(device_name, wires=num_qubits)
         self.qnode = qml.QNode(self._circuit,
                                device=self.qdevice,
                                interface="torch",
-                               diff_method=qdiff_method)
+                               diff_method=diff_method)
 
         weight_shapes = {
             "weights": qml.StronglyEntanglingLayers.shape(

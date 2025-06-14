@@ -108,6 +108,7 @@ class HQNN_Parallel(nn.Module):
         )
 
         # Quantum layers
+        # TODO: try one big qlayer instead of many (with changed weight_shapes)
         self.qlayers = nn.ModuleList([
             QLayer(num_qubits=num_qubits, num_qreps=num_qreps,
                    device_name=qdevice, diff_method=qdiff_method)
