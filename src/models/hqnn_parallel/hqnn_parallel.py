@@ -36,12 +36,24 @@ class QLayer(nn.Module):
         qml.AngleEmbedding(inputs, rotation="X",
                            wires=list(range(self.num_qubits)))
         qml.StronglyEntanglingLayers(weights,
-                                     wires=list(range(self.num_qubits)))
+                                     wires=list(range(self.num_qubits)),
+                                     imprimitive=qml.CNOT)
         return [qml.expval(qml.PauliY(wires=i))
                 for i in range(self.num_qubits)]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.qlayer(x)
+
+
+class TanhScale(nn.Module):
+    """tanh(x) * scale"""
+    def __init__(self, scale: float = 1) -> None:
+        super().__init__()
+        self.scale = scale
+        self.tanh = nn.Tanh()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.tanh(x) * self.scale
 
 
 class HQNN_Parallel(nn.Module):
@@ -109,6 +121,7 @@ class HQNN_Parallel(nn.Module):
 
         # Quantum layers
         # TODO: try one big qlayer instead of many (with changed weight_shapes)
+        self.tanh_scale = TanhScale(scale=math.pi/2)
         self.qlayers = nn.ModuleList([
             QLayer(num_qubits=num_qubits, num_qreps=num_qreps,
                    device_name=qdevice, diff_method=qdiff_method)
@@ -126,7 +139,7 @@ class HQNN_Parallel(nn.Module):
         x = self.flatten(x)
         x = self.fc_block1(x)
 
-        x = torch.sigmoid(x) * math.pi
+        x = self.tanh_scale(x)
         x_c = x.chunk(self.num_qlayers, dim=1)
         q = [layer(c) for layer, c in zip(self.qlayers, x_c)]
         x = torch.cat(q, dim=1)
