@@ -31,6 +31,8 @@ class OptimizerName(str, Enum):
 
 class SchedulerName(str, Enum):
     NONE = "none"
+    STEPLR = "steplr"
+    EXPOTENTIALLR = "exponentiallr"
 
 
 class SearchMethod(str, Enum):

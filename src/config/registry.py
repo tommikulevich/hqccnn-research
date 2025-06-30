@@ -1,5 +1,6 @@
 """Registries for models, optimizers, schedulers, searches, datasets etc."""
 from torch.optim import Adam, SGD
+from torch.optim.lr_scheduler import StepLR, ExponentialLR
 from torch.nn import CrossEntropyLoss
 from torchvision import datasets
 
@@ -11,7 +12,7 @@ from models.hcqtcnn.hcqtcnn import HCQTCNN
 from models.hcqtcnn.resnet34 import HCQTCNN_Classic_ResNet
 from search.grid import grid_search
 from config.enums import (DatasetName, ModelName, LossName,
-                          OptimizerName, SearchMethod)
+                          OptimizerName, SearchMethod, SchedulerName)
 
 
 DATASET_REGISTRY = {
@@ -44,6 +45,8 @@ OPTIMIZER_REGISTRY = {
 
 
 SCHEDULER_REGISTRY = {
+    SchedulerName.STEPLR: StepLR,
+    SchedulerName.EXPOTENTIALLR: ExponentialLR,
 }
 
 
