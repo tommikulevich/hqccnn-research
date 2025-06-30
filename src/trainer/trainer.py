@@ -305,7 +305,7 @@ class Trainer:
             if self.scheduler is not None:
                 self.scheduler.step()
                 self.logger.info("Scheduler next LR = ",
-                                 {self.scheduler.get_last_lr()})
+                                 self.scheduler.get_last_lr())
 
             if epoch % self.config.logging.save_interval == 0:
                 self._save_checkpoint(epoch)
