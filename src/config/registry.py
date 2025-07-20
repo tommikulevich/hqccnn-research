@@ -21,6 +21,7 @@ DATASET_REGISTRY = {
     DatasetName.CIFAR10: datasets.CIFAR10,
     DatasetName.CIFAR100: datasets.CIFAR100,
     DatasetName.EUROSAT: datasets.EuroSAT,
+    DatasetName.SVHN: datasets.SVHN,
     DatasetName.CUSTOM: datasets.ImageFolder,
 }
 

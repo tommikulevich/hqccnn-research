@@ -8,6 +8,7 @@ class DatasetName(str, Enum):
     CIFAR10 = "cifar-10"
     CIFAR100 = "cifar-100"
     EUROSAT = "eurosat"
+    SVHN = "svhn"
     CUSTOM = "custom"
 
 

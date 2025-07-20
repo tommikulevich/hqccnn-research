@@ -62,14 +62,17 @@ def get_dataloaders(cfg: DataConfig, dataset_cls: VisionDataset,
         if os.path.isdir(test_folder):
             test_ds = dataset_cls(test_folder, transform=test_transform)
     else:
-        ds_kwargs = {'root': data_dir, 'download': True}
-
         init_sig = inspect.signature(dataset_cls.__init__)
-        has_train_flag = 'train' in init_sig.parameters
-        if has_train_flag:
+        if 'train' in init_sig.parameters:
             ds_train_base = dataset_cls(root=data_dir, train=True,
                                         transform=None, download=True)
             ds_test_base = dataset_cls(root=data_dir, train=False,
+                                       transform=None, download=True)
+            base_ds = ConcatDataset([ds_train_base, ds_test_base])
+        elif 'split' in init_sig.parameters:
+            ds_train_base = dataset_cls(root=data_dir, split='train',
+                                        transform=None, download=True)
+            ds_test_base = dataset_cls(root=data_dir, split='test',
                                        transform=None, download=True)
             base_ds = ConcatDataset([ds_train_base, ds_test_base])
         else:
@@ -91,11 +94,18 @@ def get_dataloaders(cfg: DataConfig, dataset_cls: VisionDataset,
         test_idx = indices[train_n + val_n:]
 
         def make_concat(transform, download_flag=False):
-            if has_train_flag:
+            if 'train' in init_sig.parameters:
                 return ConcatDataset([
                     dataset_cls(root=data_dir, train=True,
                                 transform=transform, download=download_flag),
                     dataset_cls(root=data_dir, train=False,
+                                transform=transform, download=download_flag)
+                ])
+            elif 'split' in init_sig.parameters:
+                return ConcatDataset([
+                    dataset_cls(root=data_dir, split='train',
+                                transform=transform, download=download_flag),
+                    dataset_cls(root=data_dir, split='test',
                                 transform=transform, download=download_flag)
                 ])
             else:
