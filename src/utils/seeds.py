@@ -5,8 +5,19 @@ import numpy as np
 import torch
 
 
+_GLOBAL_SEED = 42
+
+
+def get_seed() -> int:
+    """Return seed value."""
+    return _GLOBAL_SEED
+
+
 def set_seeds(seed: int) -> None:
     """Set random seeds for reproducibility."""
+    global _GLOBAL_SEED
+    _GLOBAL_SEED = seed
+
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)

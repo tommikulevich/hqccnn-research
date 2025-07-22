@@ -1,5 +1,6 @@
 """Hybrid QNN Parallel model."""
 import math
+from enum import Enum
 from typing import List, Tuple
 
 import torch
@@ -7,13 +8,38 @@ import torch.nn as nn
 import pennylane as qml
 from pennylane.qnn import TorchLayer
 
+try:
+    from utils.seeds import get_seed
+except ImportError:
+    print("Warning: problem with importing utils.seeds. \
+        Set seed to 42 in RandomLayer (if it is used)")
+
+    def get_seed() -> int:
+        return 42
+
+
+# TODO: make it more universal (every type has many different params)
+class AnsatzType(str, Enum):
+    SEL = "sel"     # StronglyEntanglingLayers
+    BEL = "bel"     # BasicEntanglerLayers
+    RL = "rl"       # RandomLayers
+
 
 class QLayer(nn.Module):
-    def __init__(self, num_qubits: int, num_qreps: int,
+    def __init__(self, ansatz_type: AnsatzType,
+                 num_qubits: int, num_qreps: int,
                  device_name: str = "default.qubit",
                  diff_method: str = "best") -> None:
         super().__init__()
 
+        # Some way to apply string instead of enum
+        if isinstance(ansatz_type, str):
+            try:
+                ansatz_type = AnsatzType[ansatz_type.upper()]
+            except KeyError:
+                raise ValueError(f"Unknown ansatz type: {ansatz_type}")
+
+        self.ansatz_type = ansatz_type
         self.num_qubits = num_qubits
         self.num_qreps = num_qreps
 
@@ -23,21 +49,53 @@ class QLayer(nn.Module):
                                interface="torch",
                                diff_method=diff_method)
 
-        weight_shapes = {
-            "weights": qml.StronglyEntanglingLayers.shape(
-                n_layers=num_qreps, n_wires=num_qubits
-            )
-        }
+        if ansatz_type is AnsatzType.SEL:
+            weight_shapes = {
+                "weights": qml.StronglyEntanglingLayers.shape(
+                    n_layers=num_qreps, n_wires=num_qubits
+                )
+            }
+        elif ansatz_type is AnsatzType.BEL:
+            weight_shapes = {
+                "weights": qml.BasicEntanglerLayers.shape(
+                    n_layers=num_qreps, n_wires=num_qubits
+                )
+            }
+        elif ansatz_type is AnsatzType.RL:
+            weight_shapes = {
+                "weights": qml.RandomLayers.shape(
+                    n_layers=num_qreps, n_rotations=num_qubits
+                )
+            }
+        else:
+            raise RuntimeError(f"Unknown ansatz type: {ansatz_type}")
 
         self.qlayer = TorchLayer(self.qnode, weight_shapes)
 
     def _circuit(self, inputs: torch.Tensor, weights: torch.Tensor) \
             -> List[torch.Tensor]:
+        # Encoding
         qml.AngleEmbedding(inputs, rotation="X",
                            wires=list(range(self.num_qubits)))
-        qml.StronglyEntanglingLayers(weights,
+
+        # Ansatz
+        if self.ansatz_type is AnsatzType.SEL:
+            qml.StronglyEntanglingLayers(weights,
+                                         wires=list(range(self.num_qubits)),
+                                         imprimitive=qml.CNOT)
+        elif self.ansatz_type is AnsatzType.BEL:
+            qml.BasicEntanglerLayers(weights,
                                      wires=list(range(self.num_qubits)),
-                                     imprimitive=qml.CNOT)
+                                     rotation=qml.RZ)
+        elif self.ansatz_type is AnsatzType.RL:
+            qml.RandomLayers(weights,
+                             wires=list(range(self.num_qubits)),
+                             imprimitive=qml.CNOT,
+                             seed=get_seed())
+        else:
+            raise RuntimeError(f"Undefined AnsatzType: {self.ansatz_type}")
+
+        # Measure
         return [qml.expval(qml.PauliY(wires=i))
                 for i in range(self.num_qubits)]
 
@@ -47,13 +105,15 @@ class QLayer(nn.Module):
 
 class QLayersParallel(nn.Module):
     """Parallel application of multiple QLayer modules."""
-    def __init__(self, num_layers: int, num_qubits: int, num_qreps: int,
+    def __init__(self, ansatz_type: AnsatzType,
+                 num_layers: int, num_qubits: int, num_qreps: int,
                  device_name: str, diff_method: str) -> None:
         super().__init__()
 
         self.num_layers = num_layers
         self.layers = nn.ModuleList([
-            QLayer(num_qubits=num_qubits, num_qreps=num_qreps,
+            QLayer(ansatz_type=ansatz_type,
+                   num_qubits=num_qubits, num_qreps=num_qreps,
                    device_name=device_name, diff_method=diff_method)
             for _ in range(num_layers)
         ])
@@ -82,8 +142,8 @@ class HQNN_Parallel(nn.Module):
                  input_size: Tuple[int, int, int],
                  conv_channels: List[int], conv_kernels: List[int],
                  conv_strides: List[int], conv_paddings: List[int],
-                 pool_sizes: List[int], num_qubits: int,
-                 num_qlayers: int, num_qreps: int,
+                 pool_sizes: List[int], ansatz_type: AnsatzType,
+                 num_qubits: int, num_qlayers: int, num_qreps: int,
                  qdevice: str, qdiff_method: str) -> None:
         super().__init__()
 
@@ -142,7 +202,8 @@ class HQNN_Parallel(nn.Module):
         # Quantum layers
         self.tanh_scale = TanhScale(scale=math.pi/2)
         self.qlayers = QLayersParallel(
-            num_layers=self.num_qlayers,
+            ansatz_type=ansatz_type,
+            num_layers=num_qlayers,
             num_qubits=num_qubits,
             num_qreps=num_qreps,
             device_name=qdevice,

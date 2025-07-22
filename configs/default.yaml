@@ -37,6 +37,7 @@ model:
     conv_strides: [1, 1]
     conv_paddings: [2, 2]
     pool_sizes: [2, 2]
+    ansatz_type: sel
     num_qubits: 5
     num_qlayers: 4
     num_qreps: 3
