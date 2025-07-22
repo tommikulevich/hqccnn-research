@@ -96,6 +96,13 @@ class Trainer:
         self.logger.info("> Scheduler: \n%s", self.scheduler)
         self.writer.add_text(f"{model}", f'model_{ts}.txt')
 
+        # self.logger.info("> Train classes: %s",
+        #                  count_dataloader_images_per_class(train_loader))
+        # self.logger.info("> Validation classes: %s",
+        #                  count_dataloader_images_per_class(val_loader))
+        # self.logger.info("> Test classes: %s",
+        #                  count_dataloader_images_per_class(test_loader))
+
         # Checkpoint dir
         self.checkpoint_dir = Path(self.config.logging.checkpoint_dir, ts)
         os.makedirs(self.checkpoint_dir, exist_ok=True)

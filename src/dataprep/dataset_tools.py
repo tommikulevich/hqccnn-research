@@ -2,6 +2,7 @@
 import inspect
 import os
 from typing import Tuple, Optional
+from collections import Counter
 
 import torch
 from torch.utils.data import DataLoader, Subset, ConcatDataset
@@ -9,6 +10,35 @@ from torchvision import transforms
 from torchvision.datasets import ImageFolder, VisionDataset
 
 from config.schema import DataConfig
+
+
+def count_dataloader_images_per_class(loader):
+    if loader is None:
+        return {}
+
+    ds = loader.dataset
+
+    if hasattr(ds, 'targets'):
+        labels = ds.targets
+    elif hasattr(ds, 'labels'):
+        labels = ds.labels
+    elif hasattr(ds, 'samples'):
+        labels = [lbl for _, lbl in ds.samples]
+    else:
+        labels = []
+        for _, batch_labels in loader:
+            if hasattr(batch_labels, 'cpu'):
+                batch_labels = batch_labels.cpu().numpy().ravel().tolist()
+            else:
+                batch_labels = list(batch_labels)
+            labels += batch_labels
+
+    counter = Counter(labels)
+
+    if hasattr(ds, 'classes'):
+        return {ds.classes[k]: int(v) for k, v in counter.items()}
+    else:
+        return {int(k): int(v) for k, v in counter.items()}
 
 
 def get_dataloaders(cfg: DataConfig, dataset_cls: VisionDataset,
