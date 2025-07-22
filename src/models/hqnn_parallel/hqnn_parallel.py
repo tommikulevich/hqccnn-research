@@ -45,6 +45,26 @@ class QLayer(nn.Module):
         return self.qlayer(x)
 
 
+class QLayersParallel(nn.Module):
+    """Parallel application of multiple QLayer modules."""
+    def __init__(self, num_layers: int, num_qubits: int, num_qreps: int,
+                 device_name: str, diff_method: str) -> None:
+        super().__init__()
+
+        self.num_layers = num_layers
+        self.layers = nn.ModuleList([
+            QLayer(num_qubits=num_qubits, num_qreps=num_qreps,
+                   device_name=device_name, diff_method=diff_method)
+            for _ in range(num_layers)
+        ])
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Chunk input, apply each QLayer, and concat outputs
+        chunks = x.chunk(self.num_layers, dim=1)
+        outs = [layer(c) for layer, c in zip(self.layers, chunks)]
+        return torch.cat(outs, dim=1)
+
+
 class TanhScale(nn.Module):
     """tanh(x) * scale"""
     def __init__(self, scale: float = 1) -> None:
@@ -120,13 +140,14 @@ class HQNN_Parallel(nn.Module):
         )
 
         # Quantum layers
-        # TODO: try one big qlayer instead of many (with changed weight_shapes)
         self.tanh_scale = TanhScale(scale=math.pi/2)
-        self.qlayers = nn.ModuleList([
-            QLayer(num_qubits=num_qubits, num_qreps=num_qreps,
-                   device_name=qdevice, diff_method=qdiff_method)
-            for _ in range(num_qlayers)
-        ])
+        self.qlayers = QLayersParallel(
+            num_layers=self.num_qlayers,
+            num_qubits=num_qubits,
+            num_qreps=num_qreps,
+            device_name=qdevice,
+            diff_method=qdiff_method,
+        )
 
         # Classical linear layer
         self.fc_block2 = nn.Linear(in_features=self.num_q_features,
@@ -140,9 +161,7 @@ class HQNN_Parallel(nn.Module):
         x = self.fc_block1(x)
 
         x = self.tanh_scale(x)
-        x_c = x.chunk(self.num_qlayers, dim=1)
-        q = [layer(c) for layer, c in zip(self.qlayers, x_c)]
-        x = torch.cat(q, dim=1)
+        x = self.qlayers(x)
 
         x = self.fc_block2(x)
 
