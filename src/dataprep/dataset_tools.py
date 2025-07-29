@@ -8,37 +8,27 @@ import torch
 from torch.utils.data import DataLoader, Subset, ConcatDataset
 from torchvision import transforms
 from torchvision.datasets import ImageFolder, VisionDataset
+from sklearn.model_selection import StratifiedShuffleSplit
+import numpy as np
 
 from config.schema import DataConfig
 
 
-def count_dataloader_images_per_class(loader):
+def count_dataloader_images_per_class(loader: DataLoader):
+    """Count number of samples per target class in a DataLoader."""
     if loader is None:
         return {}
 
-    ds = loader.dataset
+    cnt = Counter()
+    for batch in loader:
+        labels = batch[1]
+        if isinstance(labels, torch.Tensor):
+            labels = labels.view(-1).tolist()
+        else:
+            labels = list(labels)
+        cnt.update(labels)
 
-    if hasattr(ds, 'targets'):
-        labels = ds.targets
-    elif hasattr(ds, 'labels'):
-        labels = ds.labels
-    elif hasattr(ds, 'samples'):
-        labels = [lbl for _, lbl in ds.samples]
-    else:
-        labels = []
-        for _, batch_labels in loader:
-            if hasattr(batch_labels, 'cpu'):
-                batch_labels = batch_labels.cpu().numpy().ravel().tolist()
-            else:
-                batch_labels = list(batch_labels)
-            labels += batch_labels
-
-    counter = Counter(labels)
-
-    if hasattr(ds, 'classes'):
-        return {ds.classes[k]: int(v) for k, v in counter.items()}
-    else:
-        return {int(k): int(v) for k, v in counter.items()}
+    return dict(cnt)
 
 
 def get_dataloaders(cfg: DataConfig, dataset_cls: VisionDataset,
@@ -108,20 +98,33 @@ def get_dataloaders(cfg: DataConfig, dataset_cls: VisionDataset,
         else:
             base_ds = dataset_cls(root=data_dir, transform=None, download=True)
 
-        n = len(base_ds)
-        train_n = int(n * train_ratio)
-        val_n = int(n * val_ratio)
-        test_n = n - train_n - val_n
+        labels = np.array([int(base_ds[i][1]) for i in range(len(base_ds))])
 
-        if seed is not None:
-            gen = torch.Generator().manual_seed(seed)
-            indices = torch.randperm(n, generator=gen).tolist()
+        sss1 = StratifiedShuffleSplit(
+            n_splits=1,
+            test_size=(val_ratio + test_ratio),
+            random_state=seed,
+        )
+        train_idx, rest_idx = next(sss1.split(np.zeros(len(labels)), labels))
+
+        val_idx, test_idx = [], []
+        if val_ratio > 0 and test_ratio > 0:
+            sss2 = StratifiedShuffleSplit(
+                n_splits=1,
+                test_size=test_ratio / (val_ratio + test_ratio),
+                random_state=seed,
+            )
+
+            sub_labels = labels[rest_idx]
+            idx_a, idx_b = next(sss2.split(np.zeros(len(sub_labels)),
+                                           sub_labels))
+
+            val_idx = [rest_idx[i] for i in idx_a]
+            test_idx = [rest_idx[i] for i in idx_b]
+        elif val_ratio > 0:
+            val_idx = rest_idx
         else:
-            indices = list(range(n))
-
-        train_idx = indices[:train_n]
-        val_idx = indices[train_n:train_n + val_n]
-        test_idx = indices[train_n + val_n:]
+            test_idx = rest_idx
 
         def make_concat(transform, download_flag=False):
             if 'train' in init_sig.parameters:
@@ -149,7 +152,7 @@ def get_dataloaders(cfg: DataConfig, dataset_cls: VisionDataset,
         val_ds = Subset(full_val_ds,   val_idx)
 
         test_ds = None
-        if test_n > 0:
+        if test_idx:
             full_test_ds = make_concat(test_transform, download_flag=False)
             test_ds = Subset(full_test_ds, test_idx)
 
