@@ -31,6 +31,7 @@ class Quanv(nn.Module):
                  stride: int, padding: int,
                  ansatz_type: AnsatzType,
                  num_qubits: int, num_qreps: int,
+                 split_channels: bool = False,
                  device_name: str = "default.qubit",
                  diff_method: str = "best") -> None:
         super().__init__()
@@ -46,14 +47,19 @@ class Quanv(nn.Module):
         self.k = kernel_size
         self.s = stride
         self.p = padding
+        self.split_channels = split_channels
 
         self.ansatz_type = ansatz_type
         self.num_qubits = num_qubits
         self.num_qreps = num_qreps
 
-        self.n_inputs = in_channels * self.k * self.k
-        assert self.num_qubits == self.n_inputs, \
-            "num_qubits must equal in_channels*kernel_size*kernel_size"
+        self.n_inputs = self.k * self.k if split_channels \
+            else in_channels * self.k * self.k
+        assert num_qubits == self.n_inputs, (
+            "num_qubits must equal "
+            + ('kernel_size*kernel_size' if split_channels
+                else 'in_channels*kernel_size*kernel_size')
+        )
 
         self.qdevice = qml.device(device_name, wires=self.num_qubits)
         self.qnode = qml.QNode(self._circuit,
@@ -134,16 +140,17 @@ class Quanv(nn.Module):
         wo = patches.size(WIDTH_DIM)
 
         flat = patches.contiguous().view(-1, self.n_inputs)
+        qout = self.qlayer(flat)
 
-        qout = self.qlayer(flat)                       # [B*Ho*Wo, qubits]
-        qm = qout.view(b, ho, wo, self.num_qubits)     # [B, Ho, Wo, qubits]
+        OUT_B, OUT_H, OUT_W, OUT_Q, OUT_K = 0, 1, 2, 3, 4
 
-        OUT_B = 0
-        OUT_Q = 3
-        OUT_H = 1
-        OUT_W = 2
-
-        return qm.permute(OUT_B, OUT_Q, OUT_H, OUT_W)  # [B, qubits, Ho, Wo]
+        if self.split_channels:
+            qout = qout.view(b, ho, wo, c, self.k * self.k)
+            qout = qout.permute(OUT_B, OUT_Q, OUT_K, OUT_H, OUT_W)
+            return qout.reshape(b, c * self.k * self.k, ho, wo)
+        else:
+            qout = qout.view(b, ho, wo, self.n_inputs)
+            return qout.permute(OUT_B, OUT_Q, OUT_H, OUT_W)
 
 
 class TanhScale(nn.Module):
@@ -164,7 +171,8 @@ class HQNN_Quanv(nn.Module):
                  quanv_kernels: List[int], quanv_strides: List[int],
                  quanv_paddings: List[int], pool_sizes: List[int],
                  ansatz_type: AnsatzType,
-                 num_qreps: int, qdevice: str, qdiff_method: str) -> None:
+                 num_qreps: int, split_channels: bool,
+                 qdevice: str, qdiff_method: str) -> None:
         super().__init__()
 
         n_quanv = len(quanv_kernels)
@@ -185,13 +193,14 @@ class HQNN_Quanv(nn.Module):
             p = quanv_paddings[i]
             pool_k = pool_sizes[i]
             out_ch = prev_ch * k * k
+            num_q = k * k if split_channels else out_ch
 
             block = nn.Sequential(
-                Quanv(in_channels=prev_ch, num_qubits=out_ch, kernel_size=k,
+                Quanv(in_channels=prev_ch, num_qubits=num_q, kernel_size=k,
                       stride=s, padding=p, ansatz_type=ansatz_type,
-                      num_qreps=num_qreps, device_name=qdevice,
-                      diff_method=qdiff_method),
-                nn.BatchNorm2d(out_ch),
+                      num_qreps=num_qreps, split_channels=split_channels,
+                      device_name=qdevice, diff_method=qdiff_method),
+                nn.BatchNorm2d(num_features=out_ch),
                 nn.ReLU(),
                 nn.MaxPool2d(kernel_size=pool_k),
             )
