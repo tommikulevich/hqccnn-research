@@ -13,6 +13,9 @@ import numpy as np
 
 from config.schema import DataConfig
 
+SVHN_BALANCE = True
+SVHN_BALANCED_IMAGES = 60000
+
 
 def count_dataloader_images_per_class(loader: DataLoader):
     """Count number of samples per target class in a DataLoader."""
@@ -83,78 +86,163 @@ def get_dataloaders(cfg: DataConfig, dataset_cls: VisionDataset,
             test_ds = dataset_cls(test_folder, transform=test_transform)
     else:
         init_sig = inspect.signature(dataset_cls.__init__)
-        if 'train' in init_sig.parameters:
-            ds_train_base = dataset_cls(root=data_dir, train=True,
-                                        transform=None, download=True)
-            ds_test_base = dataset_cls(root=data_dir, train=False,
-                                       transform=None, download=True)
-            base_ds = ConcatDataset([ds_train_base, ds_test_base])
-        elif 'split' in init_sig.parameters:
-            ds_train_base = dataset_cls(root=data_dir, split='train',
-                                        transform=None, download=True)
-            ds_test_base = dataset_cls(root=data_dir, split='test',
-                                       transform=None, download=True)
-            base_ds = ConcatDataset([ds_train_base, ds_test_base])
-        else:
-            base_ds = dataset_cls(root=data_dir, transform=None, download=True)
 
-        labels = np.array([int(base_ds[i][1]) for i in range(len(base_ds))])
+        # SVHN special case: 60000 total, balanced across classes
+        if dataset_cls.__name__ == 'SVHN' and SVHN_BALANCE \
+                and 'split' in init_sig.parameters:
+            ds_tr = dataset_cls(root=data_dir, split='train',
+                                transform=None, download=True)
+            ds_te = dataset_cls(root=data_dir, split='test',
+                                transform=None, download=True)
+            ds_ex = dataset_cls(root=data_dir, split='extra',
+                                transform=None, download=True)
+            base_ds = ConcatDataset([ds_tr, ds_te, ds_ex])
 
-        sss1 = StratifiedShuffleSplit(
-            n_splits=1,
-            test_size=(val_ratio + test_ratio),
-            random_state=seed,
-        )
-        train_idx, rest_idx = next(sss1.split(np.zeros(len(labels)), labels))
+            labels_all = np.array([int(base_ds[i][1])
+                                   for i in range(len(base_ds))])
+            classes = np.unique(labels_all)
+            desired_per_cls = SVHN_BALANCED_IMAGES // len(classes)
+            rng = np.random.RandomState(seed)
 
-        val_idx, test_idx = [], []
-        if val_ratio > 0 and test_ratio > 0:
-            sss2 = StratifiedShuffleSplit(
+            sel_idxs = []
+            for c in classes:
+                idxs = np.where(labels_all == c)[0]
+                rng.shuffle(idxs)
+                sel_idxs.extend(idxs[:desired_per_cls])
+            sel_idxs = np.array(sel_idxs)
+            labels_sel = labels_all[sel_idxs]
+
+            sss1 = StratifiedShuffleSplit(
                 n_splits=1,
-                test_size=test_ratio / (val_ratio + test_ratio),
+                train_size=train_ratio,
+                test_size=val_ratio + test_ratio,
                 random_state=seed,
             )
+            tr_sel, rest_sel = next(
+                sss1.split(np.zeros(len(labels_sel)), labels_sel)
+            )
+            train_idx = sel_idxs[tr_sel]
+            rest_idx = sel_idxs[rest_sel]
 
-            sub_labels = labels[rest_idx]
-            idx_a, idx_b = next(sss2.split(np.zeros(len(sub_labels)),
-                                           sub_labels))
+            val_idx, test_idx = [], []
+            if val_ratio > 0 and test_ratio > 0:
+                sss2 = StratifiedShuffleSplit(
+                    n_splits=1,
+                    train_size=val_ratio / (val_ratio + test_ratio),
+                    random_state=seed,
+                )
+                labels_rest = labels_sel[rest_sel]
+                v_sel, t_sel = next(
+                    sss2.split(np.zeros(len(labels_rest)), labels_rest)
+                )
+                val_idx = rest_idx[v_sel]
+                test_idx = rest_idx[t_sel]
+            elif val_ratio > 0:
+                val_idx = rest_idx
+            else:
+                test_idx = rest_idx
 
-            val_idx = [rest_idx[i] for i in idx_a]
-            test_idx = [rest_idx[i] for i in idx_b]
-        elif val_ratio > 0:
-            val_idx = rest_idx
-        else:
-            test_idx = rest_idx
-
-        def make_concat(transform, download_flag=False):
-            if 'train' in init_sig.parameters:
-                return ConcatDataset([
-                    dataset_cls(root=data_dir, train=True,
-                                transform=transform, download=download_flag),
-                    dataset_cls(root=data_dir, train=False,
-                                transform=transform, download=download_flag)
-                ])
-            elif 'split' in init_sig.parameters:
+            def make_svhn_concat(transform):
                 return ConcatDataset([
                     dataset_cls(root=data_dir, split='train',
-                                transform=transform, download=download_flag),
+                                transform=transform, download=False),
                     dataset_cls(root=data_dir, split='test',
-                                transform=transform, download=download_flag)
+                                transform=transform, download=False),
+                    dataset_cls(root=data_dir, split='extra',
+                                transform=transform, download=False),
                 ])
+
+            full_train_ds = make_svhn_concat(train_transform)
+            train_ds = Subset(full_train_ds, train_idx)
+            full_val_ds = make_svhn_concat(val_transform)
+            val_ds = Subset(full_val_ds,   val_idx)
+            test_ds = None
+            if len(test_idx) > 0:
+                full_test_ds = make_svhn_concat(test_transform)
+                test_ds = Subset(full_test_ds, test_idx)
+        else:
+            if 'train' in init_sig.parameters:
+                ds_train_base = dataset_cls(root=data_dir, train=True,
+                                            transform=None, download=True)
+                ds_test_base = dataset_cls(root=data_dir, train=False,
+                                           transform=None, download=True)
+                base_ds = ConcatDataset([ds_train_base, ds_test_base])
+            elif 'split' in init_sig.parameters:
+                ds_train_base = dataset_cls(root=data_dir, split='train',
+                                            transform=None, download=True)
+                ds_test_base = dataset_cls(root=data_dir, split='test',
+                                           transform=None, download=True)
+                base_ds = ConcatDataset([ds_train_base, ds_test_base])
             else:
-                return dataset_cls(root=data_dir, transform=transform,
-                                   download=download_flag)
+                base_ds = dataset_cls(root=data_dir, transform=None,
+                                      download=True)
 
-        full_train_ds = make_concat(train_transform, download_flag=True)
-        train_ds = Subset(full_train_ds, train_idx)
+            labels = np.array([int(base_ds[i][1])
+                               for i in range(len(base_ds))])
 
-        full_val_ds = make_concat(val_transform, download_flag=False)
-        val_ds = Subset(full_val_ds,   val_idx)
+            sss1 = StratifiedShuffleSplit(
+                n_splits=1,
+                test_size=(val_ratio + test_ratio),
+                random_state=seed,
+            )
+            train_idx, rest_idx = next(sss1.split(np.zeros(len(labels)),
+                                                  labels))
 
-        test_ds = None
-        if test_idx:
-            full_test_ds = make_concat(test_transform, download_flag=False)
-            test_ds = Subset(full_test_ds, test_idx)
+            val_idx, test_idx = [], []
+            if val_ratio > 0 and test_ratio > 0:
+                sss2 = StratifiedShuffleSplit(
+                    n_splits=1,
+                    test_size=test_ratio / (val_ratio + test_ratio),
+                    random_state=seed,
+                )
+
+                sub_labels = labels[rest_idx]
+                idx_a, idx_b = next(sss2.split(np.zeros(len(sub_labels)),
+                                               sub_labels))
+
+                val_idx = [rest_idx[i] for i in idx_a]
+                test_idx = [rest_idx[i] for i in idx_b]
+            elif val_ratio > 0:
+                val_idx = rest_idx
+            else:
+                test_idx = rest_idx
+
+            def make_concat(transform, download_flag=False):
+                if 'train' in init_sig.parameters:
+                    return ConcatDataset([
+                        dataset_cls(root=data_dir, train=True,
+                                    transform=transform,
+                                    download=download_flag),
+                        dataset_cls(root=data_dir, train=False,
+                                    transform=transform,
+                                    download=download_flag),
+                    ])
+                elif 'split' in init_sig.parameters:
+                    return ConcatDataset([
+                        dataset_cls(root=data_dir, split='train',
+                                    transform=transform,
+                                    download=download_flag),
+                        dataset_cls(root=data_dir, split='test',
+                                    transform=transform,
+                                    download=download_flag),
+                    ])
+                else:
+                    return dataset_cls(root=data_dir,
+                                       transform=transform,
+                                       download=download_flag)
+
+            full_train_ds = make_concat(train_transform, download_flag=True)
+            train_ds = Subset(full_train_ds, train_idx)
+
+            full_val_ds = make_concat(val_transform,
+                                      download_flag=False)
+            val_ds = Subset(full_val_ds,   val_idx)
+
+            test_ds = None
+            if test_idx:
+                full_test_ds = make_concat(test_transform,
+                                           download_flag=False)
+                test_ds = Subset(full_test_ds, test_idx)
 
     # Build dataloaders
     train_loader = DataLoader(train_ds, batch_size=batch_size,
