@@ -3,6 +3,7 @@ import argparse
 
 from runners.inference import run_inference
 from runners.train import run_train
+from runners.test import run_test_custom
 from config.schema import Config
 from config.loader import load_config
 
@@ -17,6 +18,12 @@ def main() -> None:
                         help='[Train] Path to checkpoint to resume')
     parser.add_argument('--dry-run', action='store_true',
                         help='[Train] Perform a dry run')
+    parser.add_argument('--test', type=str, default=None,
+                        help='[Test] Path to checkpoint to test')
+    parser.add_argument('--labels', type=str, nargs='+', default=[],
+                        help='[Test] List of class labels for test outputs')
+    parser.add_argument('--extra', type=str, default="",
+                        help='[Test] Extra string to add to output filenames')
     parser.add_argument('--infer', action='store_true',
                         help='Run inference only (skips training)')
     parser.add_argument('--checkpoint', type=str,
@@ -24,7 +31,7 @@ def main() -> None:
     parser.add_argument('--input', type=str,
                         help='[Inference] Path to image file or directory.')
     parser.add_argument('--output', type=str, default='outputs/inference',
-                        help='[Inference] Directory to save inference')
+                        help='[Inference|Test] Directory to save outputs')
     args = parser.parse_args()
 
     # Load config
@@ -36,6 +43,11 @@ def main() -> None:
             parser.error("--infer requires --checkpoint and --input")
         run_inference(config, args.checkpoint, args.input, args.output)
         return
+
+    # Test mode
+    if args.test:
+        run_test_custom(config, args.test, args.output, args.labels,
+                        args.extra)
 
     # Train mode
     run_train(config, args.resume, args.dry_run)

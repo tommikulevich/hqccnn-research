@@ -186,6 +186,16 @@ cython_debug/
 
 # Archive
 .arch/
+
+# Data
 data/
 !data/.gitkeep
+
+# Outputs / examples
 outputs/
+outputs_/
+examples/
+*.csv
+
+# Configs
+*.yaml

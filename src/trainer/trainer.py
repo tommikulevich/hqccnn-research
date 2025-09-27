@@ -1,5 +1,6 @@
 """Trainer module for training and evaluating models."""
 import os
+import csv
 import zipfile
 from tqdm import tqdm
 from datetime import datetime
@@ -11,6 +12,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from torchvision.utils import save_image
 import numpy as np
 from sklearn.metrics import accuracy_score, precision_score, \
                             recall_score, f1_score, confusion_matrix
@@ -340,3 +342,76 @@ class Trainer:
         self.writer.close()
         self.train_csv.close()
         self.val_csv.close()
+
+    def test_custom(self, output_dir: str, labels: list[str],
+                    extra: str = "") -> None:
+        if self.test_loader is None:
+            self.logger.warning("No test loader provided for custom test.")
+            return
+
+        outdir = Path(output_dir)
+        outdir.mkdir(parents=True, exist_ok=True)
+
+        csv_path = outdir / 'predictions.csv'
+
+        self.model.eval()
+
+        rows = [('filename', 'expected', 'predicted')]
+        idx_global = 0
+
+        with torch.no_grad():
+            for _, (data, target) in enumerate(
+                    tqdm(self.test_loader, desc='Test custom')):
+                data = data.to(self.device)
+                target = target.to(self.device)
+
+                output = self.model(data)
+                preds = output.argmax(dim=1).cpu().numpy()
+                targets_np = target.cpu().numpy()
+
+                batch_size = data.size(0)
+                for i in range(batch_size):
+                    pi = int(preds[i])
+                    ti = int(targets_np[i])
+
+                    pred_label = labels[pi] if pi < len(labels) else str(pi)
+                    exp_label = labels[ti] if ti < len(labels) else str(ti)
+
+                    safe_pred = str(pred_label).replace(' ', '_')
+                    safe_exp = str(exp_label).replace(' ', '_')
+
+                    filename = ""
+                    if pi != ti:
+                        filename += "WRONG_"
+
+                    filename += (
+                        f"{idx_global:06d}_"
+                        f"{extra}_"
+                        f"exp_{safe_exp}_"
+                        f"pred_{safe_pred}.png"
+                    )
+                    filepath = outdir / filename
+
+                    sample = data[i].cpu()
+
+                    try:
+                        save_image(sample, str(filepath))
+                    except Exception:
+                        import numpy as _np
+                        from PIL import Image
+                        img = sample.numpy()
+                        if img.ndim == 3:
+                            img = _np.transpose(img, (1, 2, 0))
+                        img = (255 * (img - img.min()) /
+                               (img.max() - img.min()
+                                + 1e-8)).astype(_np.uint8)
+                        Image.fromarray(img).save(str(filepath))
+
+                    rows.append((filename, exp_label, pred_label))
+                    idx_global += 1
+
+        with open(csv_path, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerows(rows)
+
+        self.logger.info(f"Custom test results saved to {csv_path}")
