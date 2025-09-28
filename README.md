@@ -1,20 +1,20 @@
 # ⚛️ Hybrid Quantum-Classical CNN for Image Classification
 
-## Overview
+## 📌 Overview
 
 This project implements hybrid quantum–classical CNN models and infrastructure to train and evaluate them on various image datasets. The core idea is to combine classical layers with a quantum module which is used as a classifier or feature extractor. The codebase contains two model implementations:
 
 - `hqnn-parallel`: classical convolutional layers with a hybrid classifier (fully connected layers + parallel quantum layers).
 - `hqnn-quanv`: an alternative quantum-convolution style architecture.
 
-## Key Components
+## 💡 Key Components
 
 - Config-driven experiments using YAML files (`configs/default.yaml`).
 - Dataset utilities and registries to plug datasets, models, loss functions, optimizers and schedulers via a registry pattern.
 - Training loop with checkpointing and optional hyperparameter search hooks.
 - Inference tools that save per-layer activations and produce activation plots for analysis.
 
-## Repo Structure
+## 🗂️ Repo Structure
 
 - `configs/` – YAML configuration templates
 - `data/` – data directory
@@ -28,7 +28,7 @@ This project implements hybrid quantum–classical CNN models and infrastructure
   - `utils/` – common utilities, logging, and seeding
 - `tools/` - plotting tools
 
-## Setup
+## 🔨 Setup
 
 ```cmd
 python -m venv .venv
@@ -36,7 +36,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Configuration
+## ⚙️ Configuration
 
 Experiments are configured via YAML files. The default configuration is `configs/default.yaml`. Major sections and common options:
 
@@ -59,7 +59,7 @@ Experiments are configured via YAML files. The default configuration is `configs
 
 The code loads the YAML into a `Config` object using `src/config/loader.py` and validates keys via `src/config/schema.py`.
 
-## Registries
+## 📒 Registries
 
 This project uses a registry pattern (`src/config/registry.py`) to keep components pluggable. Below are the components currently registered and the keys you can use in `configs/*.yaml`.
 
@@ -96,7 +96,7 @@ This project uses a registry pattern (`src/config/registry.py`) to keep componen
 
 To extend registries, add your component to `src/config/registry.py` and expose a corresponding enum value in `src/config/enums.py`. The trainer and runner code construct components using the registry entries, so new components become immediately available to YAML configs.
 
-## Example Usage
+## ⌨️ Example Usage
 
 The main entrypoint is `src/main.py`. The script accepts a `--config` path and provides submodes for training, testing and inference.
 
@@ -130,10 +130,10 @@ Run a dedicated test checkpoint evaluation:
 python src/main.py --config configs/default.yaml --test outputs/checkpoints/best.pth --output outputs/test
 ```
 
-## Results
+## 📈 Results
 
 If you are interested in the results of experiments - please do not hesitate to contact me by e-mail (tommikulevich@gmail.com).
 
-## Citation
+## ✒️ Citation
 
 > Mikulevich, Tomash. Exploring the Potential of Hybrid Quantum-Classical Convolutional Neural Networks in Solving Image Classification Problems. Master’s thesis (unpublished), Gdańsk University of Technology, 2025.
